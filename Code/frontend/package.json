@@ -1,0 +1,15 @@
+{
+  "name": "feeder-frontend",
+  "version": "1.0.0",
+  "scripts": {
+    "build": "npm run create-dist && npm run minify-html && npm run minify-css && npm run copy-assets",
+    "create-dist": "mkdir -p dist/css dist/assets/images",
+    "minify-html": "html-minifier --collapse-whitespace --remove-comments --minify-css true --minify-js true -o dist/index.html index.html && html-minifier --collapse-whitespace --remove-comments --minify-css true --minify-js true -o dist/setschedule.html setschedule.html && html-minifier --collapse-whitespace --remove-comments --minify-css true --minify-js true -o dist/setquantity.html setquantity.html && html-minifier --collapse-whitespace --remove-comments --minify-css true --minify-js true -o dist/feednow.html feednow.html",
+    "minify-css": "cleancss -o dist/css/styles.css css/styles.css",
+    "copy-assets": "cp -r assets/images/* dist/assets/images/"
+  },
+  "devDependencies": {
+    "html-minifier": "^4.0.0",
+    "clean-css-cli": "^5.6.3"
+  }
+}
