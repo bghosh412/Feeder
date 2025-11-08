@@ -1,0 +1,7 @@
+[wokwi]
+version = 1
+firmware = '../main.py'
+elf = ''
+
+[[wokwi.libraries]]
+name = 'micropython'

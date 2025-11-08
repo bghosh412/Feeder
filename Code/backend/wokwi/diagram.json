@@ -1,0 +1,76 @@
+{
+  "version": 1,
+  "author": "Fish Feeder Project",
+  "editor": "wokwi",
+  "parts": [
+    {
+      "type": "wokwi-esp8266-esp12f",
+      "id": "esp",
+      "top": 0,
+      "left": 0,
+      "attrs": {}
+    },
+    {
+      "type": "wokwi-stepper-motor",
+      "id": "stepper1",
+      "top": -120,
+      "left": 200,
+      "attrs": {
+        "size": "28BYJ-48"
+      }
+    },
+    {
+      "type": "wokwi-uln2003",
+      "id": "driver1",
+      "top": -50,
+      "left": 180,
+      "attrs": {}
+    },
+    {
+      "type": "wokwi-ds1307",
+      "id": "rtc1",
+      "top": 120,
+      "left": 200,
+      "attrs": {}
+    },
+    {
+      "type": "wokwi-led",
+      "id": "led1",
+      "top": -80,
+      "left": -100,
+      "attrs": {
+        "color": "green"
+      }
+    },
+    {
+      "type": "wokwi-resistor",
+      "id": "r1",
+      "top": -50,
+      "left": -110,
+      "attrs": {
+        "value": "220"
+      }
+    }
+  ],
+  "connections": [
+    ["esp:TX", "$serialMonitor:RX", "", []],
+    ["esp:RX", "$serialMonitor:TX", "", []],
+    ["esp:D6", "driver1:IN1", "blue", ["h0"]],
+    ["esp:D7", "driver1:IN2", "yellow", ["h0"]],
+    ["esp:D5", "driver1:IN3", "orange", ["h0"]],
+    ["esp:D8", "driver1:IN4", "red", ["h0"]],
+    ["driver1:OUT1", "stepper1:A-", "blue", ["h0"]],
+    ["driver1:OUT2", "stepper1:A+", "yellow", ["h0"]],
+    ["driver1:OUT3", "stepper1:B-", "orange", ["h0"]],
+    ["driver1:OUT4", "stepper1:B+", "red", ["h0"]],
+    ["esp:D2", "rtc1:SDA", "green", ["h0"]],
+    ["esp:D1", "rtc1:SCL", "white", ["h0"]],
+    ["esp:3V3", "rtc1:VCC", "red", ["h0"]],
+    ["esp:GND", "rtc1:GND", "black", ["h0"]],
+    ["esp:GND", "driver1:GND", "black", ["h0"]],
+    ["esp:D4", "led1:A", "green", ["h0"]],
+    ["led1:C", "r1:1", "black", ["v0"]],
+    ["r1:2", "esp:GND", "black", ["v0"]]
+  ],
+  "dependencies": {}
+}
