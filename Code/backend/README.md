@@ -5,12 +5,12 @@
 ### 1. Test Motor Control
 ```bash
 # Run on ESP8266 or use micropython for syntax check
-micropython test_motor.py
+micropython ../../Tests/test_motor.py
 ```
 
 ### 2. Test RTC Communication
 ```bash
-micropython test_rtc.py
+micropython ../../Tests/test_rtc.py
 ```
 
 ### 3. Syntax Check Main Program
@@ -35,7 +35,7 @@ micropython -m py_compile config.py
 ### Quick Test File
 Use `test_simulation.py` for a simple simulation without hardware dependencies:
 ```bash
-micropython test_simulation.py
+micropython ../../Tests/test_simulation.py
 ```
 
 ## Deploying to ESP8266

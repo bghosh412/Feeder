@@ -31,13 +31,15 @@ This is an automatic fish feeder project deployed to ESP8266, powered by 4 Alkal
 │   ├── stepper.py        # 28BYJ-48 stepper motor driver
 │   ├── rtc_handler.py    # DS3231 RTC interface
 │   └── notification.py   # ntfy.sh notification service
-├── test_motor.py         # Standalone motor testing
-├── test_rtc.py           # Standalone RTC testing
-├── test_simulation.py    # Simple simulation without hardware
 ├── wokwi/                # Wokwi online simulator configuration
 │   ├── diagram.json      # Circuit diagram
 │   └── wokwi.toml        # Simulator settings
 └── README.md             # Testing and deployment guide
+
+/Tests/
+├── test_motor.py         # Standalone motor testing
+├── test_rtc.py           # Standalone RTC testing
+└── test_simulation.py    # Simple simulation without hardware
 ```
 
 #### Key Backend Components
@@ -125,10 +127,10 @@ This is an automatic fish feeder project deployed to ESP8266, powered by 4 Alkal
 source venv/bin/activate
 
 # Test syntax and basic logic
-micropython test_simulation.py
+micropython Tests/test_simulation.py
 
 # Check for syntax errors
-micropython -m py_compile main.py
+micropython -m py_compile Code/backend/main.py
 ```
 
 ### Wokwi Online Simulation
@@ -141,10 +143,10 @@ micropython -m py_compile main.py
 ### Hardware Testing
 ```bash
 # Test motor independently
-micropython test_motor.py
+micropython Tests/test_motor.py
 
 # Test RTC independently  
-micropython test_rtc.py
+micropython Tests/test_rtc.py
 ```
 
 ### Deployment to ESP8266
@@ -172,4 +174,5 @@ ampy --port /dev/ttyUSB0 put lib/notification.py lib/notification.py
 - **Instructions**: `/Instructions/`
 - **Backend Code**: `/Code/backend`
 - **Frontend Code**: `/Code/frontend`
+- **Test Files**: `/Tests`
 - **Python Virtual Environment**: `/venv`

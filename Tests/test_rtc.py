@@ -1,5 +1,7 @@
 # Test script for DS3231 RTC
 # Run this to test RTC functionality
+import sys
+sys.path.append('../Code/backend')
 
 from lib.rtc_handler import DS3231
 import time

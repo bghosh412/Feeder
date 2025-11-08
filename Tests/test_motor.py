@@ -1,5 +1,7 @@
 # Test script for stepper motor
 # Run this to test motor movement without full system
+import sys
+sys.path.append('../Code/backend')
 
 from lib.stepper import StepperMotor
 import time
