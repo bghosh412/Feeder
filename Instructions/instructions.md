@@ -12,6 +12,60 @@ This is an automatic fish feeder project deployed to ESP8266, powered by 4 Alkal
 
 ## Software Architecture
 
+### Frontend (Web Interface)
+
+#### Location
+- `/Code/frontend`
+
+#### Purpose
+- Provides a simple web interface for configuring feeding schedule, portion size, and viewing system status.
+- Designed to be extremely lightweight for ESP8266 static hosting.
+
+#### Features
+- Set feeding schedule (time)
+- Set feed quantity
+- View feed remaining, last fed time, battery status, and system info
+- Quick links for navigation
+
+#### Technology
+- Pure HTML and CSS (no frameworks, no JavaScript required for basic operation)
+- Minimal CSS for layout and readability
+- No build tools, no dependencies
+- Can be served as static files from ESP8266 SPIFFS or LittleFS
+
+#### File Structure
+```
+Code/frontend/
+├── index.html         # Main web page
+├── css/
+│   └── styles.css     # Minimal stylesheet
+├── assets/
+│   └── images/
+│       └── Header.png # Header logo
+```
+
+#### Usage
+- Open `index.html` in a browser to access the feeder controls.
+- Hyperlinks in the sidebar allow quick navigation to schedule, feed, and quantity sections.
+- All status and configuration is displayed on a single page for simplicity.
+
+#### Customization
+- To change logo, replace `Header.png` in `assets/images/`.
+- To adjust colors or layout, edit `css/styles.css`.
+- For ESP8266, keep HTML and CSS as small as possible for fast loading and low memory usage.
+
+#### Example UI Layout
+- Header: Logo and title side-by-side (black background, white text)
+- Sidebar: Quick links (gray background, black text)
+- Main: Feed Remaining, Last Fed, Battery Status, System Information (cards with borders)
+
+#### Deployment to ESP8266
+- Upload `index.html`, `css/styles.css`, and `assets/images/Header.png` to ESP8266 SPIFFS/LittleFS
+- Serve files using a simple HTTP server (MicroPython or Arduino ESP8266WebServer)
+- No dynamic backend required for basic display
+
+---
+
 ### Backend - MicroPython
 - **Location**: `/Code/backend`
 - **Platform**: MicroPython for ESP8266
@@ -75,15 +129,6 @@ This is an automatic fish feeder project deployed to ESP8266, powered by 4 Alkal
 - HTTP POST to ntfy.sh service
 - Success and error notification methods
 - Configurable priority levels
-
-### Frontend - React (No Node)
-- **Location**: `/Code/frontend`
-- **Framework**: React (standalone, no Node.js server)
-- **UI Design**: Minimal interface for settings only
-- **Features**:
-  - Configure feeding times
-  - Adjust portion sizes
-  - Set notification preferences
 
 ## Development Guidelines
 
