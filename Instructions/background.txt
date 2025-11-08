@@ -1,0 +1,16 @@
+This project is about a automatic fish feeder. the code would be deployed to ESP8266, running on 4 Alkaline AA battery. So power usage needs to be extremely frugal.
+
+Overall Hardwares for the project:
+1) ESP8266
+2) Power: 4 Alkaline AA battery
+3) 28BYJ-48 5 volt stepper motor
+4) ULN2003 Steeper driver
+5) DS3231 RTC timer. For timer to wake-up ESP8266 during feeding time
+
+Software Stack:
+UI --> react (non node) location --> /Code/frontend
+backend --> micropython location --> /Code/backend
+Copilot instructions file is located at /Instructions/instructions.md
+
+The UI needs to be extremely minimal just for settings
+post feeding, it should be able to send a notification to the phone via ntfy
