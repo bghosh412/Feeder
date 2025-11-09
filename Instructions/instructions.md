@@ -59,10 +59,17 @@ Code/frontend/
 - Sidebar: Quick links (gray background, black text)
 - Main: Feed Remaining, Last Fed, Battery Status, System Information (cards with borders)
 
-#### Deployment to ESP8266
-- Upload `index.html`, `css/styles.css`, and `assets/images/Header.png` to ESP8266 SPIFFS/LittleFS
-- Serve files using a simple HTTP server (MicroPython or Arduino ESP8266WebServer)
-- No dynamic backend required for basic display
+
+#### Deployment to Local/Server (Backend always on port 5000)
+- Upload `index.html`, `css/styles.css`, and `assets/images/Header.png` to ESP8266 SPIFFS/LittleFS or serve locally.
+- Start backend server using:
+  ```bash
+  cd /home/pi/Desktop/Feeder/Code/backend
+  python3 api.py
+  ```
+- The backend API will always be available at `http://localhost:5000`.
+- Frontend API calls must use `http://localhost:5000` for all endpoints (e.g., `/api/ping`, `/api/schedule`).
+- If deploying to a remote server, replace `localhost` with the server IP.
 
 ---
 

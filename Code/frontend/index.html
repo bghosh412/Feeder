@@ -7,6 +7,22 @@
   <link rel="stylesheet" href="css/styles.css">
 </head>
 <body>
+  <script>
+    window.addEventListener('DOMContentLoaded', function() {
+  fetch('http://localhost:5000/api/ping')
+        .then(r => r.json())
+        .then(data => {
+          if (data.status === 'ok') {
+            document.getElementById('connectionStatus').textContent = 'Online';
+          } else {
+            document.getElementById('connectionStatus').textContent = 'Offline';
+          }
+        })
+        .catch(() => {
+          document.getElementById('connectionStatus').textContent = 'Offline';
+        });
+    });
+  </script>
   <div class="header">
     <div class="header-content">
       <div class="header-logo">
@@ -30,7 +46,7 @@
       <div class="info-card"><b>Last Fed:</b> <span id="lastFed">Last fed on Nov 9, 9:00 pm</span></div>
       <div class="info-card"><b>Battery Status:</b> <span id="batteryStatus">40% of the Battery remaining</span></div>
       <div class="card"><b>System Information:</b><br>
-        Connection: <span id="connectionStatus">Offline</span><br>
+        Connection: <span id="connectionStatus">Loading...</span><br>
         Next Feed: <span id="nextFeed">Not scheduled</span>
       </div>
     </div>
