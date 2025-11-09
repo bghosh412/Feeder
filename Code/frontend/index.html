@@ -12,17 +12,27 @@
 <body>
   <script>
     window.addEventListener('DOMContentLoaded', function() {
-      fetch('/api/ping')
+      fetch('/api/home')
         .then(r => r.json())
         .then(data => {
-          if (data.status === 'ok') {
-            document.getElementById('connectionStatus').textContent = 'Online';
+          document.getElementById('connectionStatus').textContent = data.connectionStatus || 'Offline';
+          document.getElementById('feedRemaining').textContent = data.feedRemaining || 'N/A';
+          if (data.lastFed) {
+            const dt = new Date(data.lastFed);
+            const options = { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' };
+            document.getElementById('lastFed').textContent = 'Last fed on ' + dt.toLocaleString(undefined, options);
           } else {
-            document.getElementById('connectionStatus').textContent = 'Offline';
+            document.getElementById('lastFed').textContent = 'Last fed time unavailable';
           }
+          document.getElementById('batteryStatus').textContent = data.batteryStatus || 'N/A';
+          document.getElementById('nextFeed').textContent = data.nextFeed || 'Not scheduled';
         })
         .catch(() => {
           document.getElementById('connectionStatus').textContent = 'Offline';
+          document.getElementById('feedRemaining').textContent = 'N/A';
+          document.getElementById('lastFed').textContent = 'Last fed time unavailable';
+          document.getElementById('batteryStatus').textContent = 'N/A';
+          document.getElementById('nextFeed').textContent = 'Not scheduled';
         });
     });
   </script>

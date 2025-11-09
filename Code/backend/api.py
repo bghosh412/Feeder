@@ -1,8 +1,116 @@
 import ujson
 import services
+import last_fed_service
+import quantity_service
+import next_feed_service
 from microdot import Microdot, Response, send_file
+import time
+import lib.notification
 
 app = Microdot()
+# Feed Now API endpoint
+@app.route('/api/feednow', methods=['POST'])
+def feed_now(request):
+    try:
+        # Read current quantity
+        quantity = quantity_service.read_quantity()
+        # Reduce by 1 if possible
+        if quantity > 0:
+            quantity -= 1
+        # Update quantity
+        quantity_service.write_quantity(quantity)
+        # Update last fed time
+        last_fed_service.write_last_fed_now()
+        # Send ntfy notification
+        now = time.localtime()
+        msg = "Feeding done at {:02d}:{:02d}:{:02d}. Feed remaining: {}".format(now[3], now[4], now[5], quantity)
+        lib.notification.send_ntfy_notification(msg)
+        return ujson.dumps({'status': 'ok', 'quantity': quantity})
+    except Exception as e:
+        return Response(ujson.dumps({'error': str(e)}), status=400)
+
+@app.route('/api/feednow', methods=['OPTIONS'])
+def feednow_options(request):
+    return ''
+
+# Quantity API endpoints
+@app.route('/api/quantity', methods=['GET'])
+def get_quantity(request):
+    quantity = quantity_service.read_quantity()
+    return ujson.dumps({'quantity': quantity})
+
+@app.route('/api/quantity', methods=['POST'])
+def set_quantity(request):
+    try:
+        data = request.json
+        value = data.get('quantity')
+        if value is not None:
+            success = quantity_service.write_quantity(value)
+            if success:
+                # Send ntfy notification
+                msg = "Remaining food quantity updated to {}".format(value)
+                lib.notification.send_ntfy_notification(msg)
+                return ujson.dumps({'status': 'ok'})
+            else:
+                return Response(ujson.dumps({'error': 'Write failed'}), status=500)
+        else:
+            return Response(ujson.dumps({'error': 'Missing quantity'}), status=400)
+    except Exception as e:
+        return Response(ujson.dumps({'error': str(e)}), status=400)
+
+@app.route('/api/quantity', methods=['OPTIONS'])
+def quantity_options(request):
+    return ''
+
+@app.route('/api/home', methods=['GET'])
+def get_home_data(request):
+    # Connection status is always ok if this endpoint is reachable
+    connection_status = 'Online'
+    # Feed remaining: read from quantity_service
+    quantity = quantity_service.read_quantity()
+    feed_remaining = f'{quantity} more feed remaining'
+    # Last fed time
+    last_fed = last_fed_service.read_last_fed()
+    # Battery status: placeholder, replace with actual logic if available
+    battery_status = '40% of the Battery remaining'
+    # Next feed: read from next_feed_service
+    next_feed = next_feed_service.read_next_feed()
+    return ujson.dumps({
+        'connectionStatus': connection_status,
+        'feedRemaining': feed_remaining,
+        'lastFed': last_fed,
+        'batteryStatus': battery_status,
+        'nextFeed': next_feed
+    })
+
+@app.route('/api/home', methods=['OPTIONS'])
+def home_options(request):
+    return ''
+@app.route('/api/lastfed', methods=['GET'])
+def get_last_fed(request):
+    last_fed = last_fed_service.read_last_fed()
+    if last_fed:
+        return ujson.dumps({'last_fed_time': last_fed})
+    return Response(ujson.dumps({'error': 'Could not read last fed time'}), status=500)
+
+@app.route('/api/lastfed', methods=['POST'])
+def set_last_fed(request):
+    try:
+        data = request.json
+        last_fed_time = data.get('last_fed_time')
+        if last_fed_time:
+            # Write the ISO string directly to the file
+            with open(last_fed_service.data_file, 'w') as f:
+                ujson.dump({'last_fed_time': last_fed_time}, f)
+            return ujson.dumps({'status': 'ok'})
+        else:
+            return Response(ujson.dumps({'error': 'Missing last_fed_time'}), status=400)
+    except Exception as e:
+        return Response(ujson.dumps({'error': str(e)}), status=400)
+
+@app.route('/api/lastfed', methods=['OPTIONS'])
+def last_fed_options(request):
+    return ''
 
 @app.after_request
 def enable_cors(request, response):
@@ -49,12 +157,12 @@ def schedule_options(request):
 
 @app.route('/', methods=['GET'])
 def index(request):
-    return send_file('../frontend/index.html')
+    return send_file('UI/index.html')
 
 @app.route('/<path:path>', methods=['GET'])
 def static_files(request, path):
     try:
-        return send_file(f'../frontend/{path}')
+        return send_file(f'UI/{path}')
     except:
         return Response('Not found', status=404)
 

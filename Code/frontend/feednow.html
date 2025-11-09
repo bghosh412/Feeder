@@ -40,5 +40,41 @@
       </div>
     </div>
   </div>
+  <script>
+document.addEventListener('DOMContentLoaded', function() {
+  function updateQuantityDisplay(qty) {
+    document.getElementById('feed-remaining').textContent = qty;
+  }
+
+  function fetchQuantity() {
+    fetch('/api/quantity')
+      .then(r => r.json())
+      .then(data => {
+        if (typeof data.quantity === 'number') {
+          updateQuantityDisplay(data.quantity);
+        }
+      });
+  }
+
+  fetchQuantity();
+
+  document.querySelector('.btn').addEventListener('click', function() {
+    // Call feednow API to reduce quantity and update last fed
+    fetch('/api/feednow', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }
+    })
+    .then(r => r.json())
+    .then(data => {
+      if (data.status === 'ok') {
+        updateQuantityDisplay(data.quantity);
+      } else {
+        alert('Error feeding now');
+      }
+    })
+    .catch(() => alert('Error feeding now'));
+  });
+});
+</script>
 </body>
 </html>

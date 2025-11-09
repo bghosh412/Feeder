@@ -2,10 +2,30 @@
 import urequests
 import json
 
+ntfy_topic = 'FF0x98854'
+
+# MicroPython-compatible notification sender
+try:
+    import urequests
+except ImportError:
+    urequests = None
+
+def send_ntfy_notification(message):
+    if urequests is None:
+        print('urequests not available, cannot send notification')
+        return
+    url = 'https://ntfy.sh/' + ntfy_topic
+    headers = {'Title': 'Auto Feeder'}
+    try:
+        r = urequests.post(url, data=message, headers=headers)
+        r.close()
+    except Exception as e:
+        print('ntfy notification error:', e)
+
 class NotificationService:
     """Send push notifications via ntfy.sh"""
     
-    def __init__(self, server, topic):
+    def __init__(self, server, topic=ntfy_topic):
         """
         Initialize notification service
         server: ntfy server URL (e.g., "https://ntfy.sh")
