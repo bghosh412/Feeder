@@ -3,6 +3,9 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
   <title>Set Feeding Schedule</title>
   <link rel="stylesheet" href="css/styles.css">
 </head>
@@ -21,9 +24,10 @@
 
     // Load schedule data from backend and bind to UI
     window.addEventListener('DOMContentLoaded', function() {
-  fetch('http://localhost:5000/api/schedule')
+      fetch('/api/schedule')
         .then(r => r.json())
         .then(data => {
+          console.log('Loaded schedule:', data);
           if (!data.feeding_times || !data.days) return;
           data.feeding_times.forEach((ft, i) => {
             document.getElementById(`ft${i+1}_chk`).checked = ft.enabled;
@@ -35,7 +39,11 @@
             const id = dayMap[day];
             if (id) document.getElementById(id).checked = data.days[day];
           });
+        })
+        .catch(err => {
+          console.error('Error loading schedule:', err);
         });
+      
       // Save handler
       document.querySelector('form').addEventListener('submit', function(e) {
         e.preventDefault();
@@ -51,14 +59,27 @@
         Object.keys(dayMap).forEach(day => {
           days[day] = document.getElementById(dayMap[day]).checked;
         });
+        
+        console.log('Saving schedule:', { feeding_times, days });
+        
         // Send to backend
-  fetch('http://localhost:5000/api/schedule', {
+        fetch('/api/schedule', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ feeding_times, days })
-        }).then(r => r.json()).then(resp => {
-          if (resp.status === 'ok') alert('Schedule saved!');
-          else alert('Error saving schedule');
+        })
+        .then(r => r.json())
+        .then(resp => {
+          console.log('Save response:', resp);
+          if (resp.status === 'ok') {
+            alert('Schedule saved!');
+          } else {
+            alert('Error saving schedule');
+          }
+        })
+        .catch(err => {
+          console.error('Error saving schedule:', err);
+          alert('Failed to save schedule');
         });
       });
     });
