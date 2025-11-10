@@ -1,0 +1,263 @@
+const fs = require('fs');
+const path = require('path');
+
+// Determine build mode from command line argument
+const mode = process.argv[2] || 'api'; // 'battery' or 'api' (default)
+
+const distDir = path.join(__dirname, 'dist');
+
+// Files needed for both modes
+const commonFiles = [
+  'config.py',
+  'lib/stepper.py',
+  'lib/rtc_handler.py',
+  'lib/notification.py'
+];
+
+// Battery mode specific files
+const batteryFiles = [
+  'main.py',
+  ...commonFiles
+];
+
+// API server mode specific files
+const apiFiles = [
+  'api.py',
+  'services.py',
+  'last_fed_service.py',
+  'next_feed_service.py',
+  'quantity_service.py',
+  'microdot.py',
+  'urequests.py',
+  ...commonFiles
+];
+
+// Data files (empty templates for API mode)
+const dataFiles = [
+  { name: 'data/schedule.json', content: '{"feeding_times": [], "days": {}}' },
+  { name: 'data/last_fed.json', content: '{"last_fed_time": null}' },
+  { name: 'data/next_feed.json', content: '{"next_feed": "Not scheduled"}' },
+  { name: 'data/quantity.json', content: '{"quantity": 10}' }
+];
+
+// UI directory (copy as is for API mode)
+const uiDir = 'UI';
+
+function createDirectory(dir) {
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+    console.log(`Created directory: ${dir}`);
+  }
+}
+
+function copyFile(src, dest) {
+  try {
+    const destDir = path.dirname(dest);
+    createDirectory(destDir);
+    
+    fs.copyFileSync(src, dest);
+    console.log(`Copied: ${src} -> ${dest}`);
+  } catch (error) {
+    console.error(`Error copying ${src}: ${error.message}`);
+  }
+}
+
+function copyDirectory(src, dest) {
+  createDirectory(dest);
+  
+  const entries = fs.readdirSync(src, { withFileTypes: true });
+  
+  for (const entry of entries) {
+    const srcPath = path.join(src, entry.name);
+    const destPath = path.join(dest, entry.name);
+    
+    if (entry.isDirectory()) {
+      copyDirectory(srcPath, destPath);
+    } else {
+      copyFile(srcPath, destPath);
+    }
+  }
+}
+
+function createDataFile(filePath, content) {
+  const fullPath = path.join(distDir, filePath);
+  const dir = path.dirname(fullPath);
+  
+  createDirectory(dir);
+  fs.writeFileSync(fullPath, content);
+  console.log(`Created: ${filePath}`);
+}
+
+function build() {
+  console.log(`\n🚀 Building for ${mode.toUpperCase()} mode...\n`);
+  
+  // Clean dist directory
+  if (fs.existsSync(distDir)) {
+    fs.rmSync(distDir, { recursive: true, force: true });
+    console.log('Cleaned dist directory\n');
+  }
+  
+  createDirectory(distDir);
+  
+  // Select files based on mode
+  const filesToCopy = mode === 'battery' ? batteryFiles : apiFiles;
+  
+  // Copy Python files
+  filesToCopy.forEach(file => {
+    const src = path.join(__dirname, file);
+    const dest = path.join(distDir, file);
+    
+    if (fs.existsSync(src)) {
+      copyFile(src, dest);
+    } else {
+      console.warn(`⚠️  Warning: ${file} not found`);
+    }
+  });
+  
+  // For API mode, copy UI directory and create/copy data files
+  if (mode === 'api') {
+    console.log('\n📁 Copying UI directory...\n');
+    const uiSrc = path.join(__dirname, uiDir);
+    const uiDest = path.join(distDir, uiDir);
+    
+    if (fs.existsSync(uiSrc)) {
+      copyDirectory(uiSrc, uiDest);
+    } else {
+      console.warn(`⚠️  Warning: ${uiDir} directory not found`);
+    }
+    
+    console.log('\n📝 Copying/Creating data files...\n');
+    const dataDir = path.join(__dirname, 'data');
+    const dataDestDir = path.join(distDir, 'data');
+    
+    // Copy data directory if it exists, otherwise create defaults
+    if (fs.existsSync(dataDir)) {
+      console.log('Found existing data directory, copying...');
+      copyDirectory(dataDir, dataDestDir);
+    } else {
+      console.log('No existing data directory, creating defaults...');
+      dataFiles.forEach(file => {
+        createDataFile(file.name, file.content);
+      });
+    }
+  }
+  
+  // Create README in dist
+  const readmeContent = `# Fish Feeder - ${mode.toUpperCase()} Mode Deployment
+
+This directory contains all files needed for ESP8266 deployment in ${mode} mode.
+
+## Files included:
+${filesToCopy.map(f => `- ${f}`).join('\n')}
+
+${mode === 'api' ? `
+## Additional directories:
+- UI/ (complete web interface)
+- data/ (JSON persistence files)
+
+## Deployment:
+Upload all files to ESP8266 maintaining the directory structure.
+The api.py will serve the UI files and handle API requests.
+` : `
+## Deployment:
+Upload all files to ESP8266 maintaining the directory structure.
+The main.py will run on boot and handle scheduled feedings.
+`}
+
+## Upload commands (using ampy):
+\`\`\`bash
+# Set your COM port
+$PORT = "COM3"
+
+${mode === 'battery' ? `
+# Upload main files
+ampy --port $PORT put main.py
+ampy --port $PORT put config.py
+
+# Create lib directory and upload drivers
+ampy --port $PORT mkdir lib
+ampy --port $PORT put lib/stepper.py lib/stepper.py
+ampy --port $PORT put lib/rtc_handler.py lib/rtc_handler.py
+ampy --port $PORT put lib/notification.py lib/notification.py
+` : `
+# Upload main files
+ampy --port $PORT put api.py
+ampy --port $PORT put config.py
+ampy --port $PORT put services.py
+ampy --port $PORT put last_fed_service.py
+ampy --port $PORT put next_feed_service.py
+ampy --port $PORT put quantity_service.py
+ampy --port $PORT put microdot.py
+ampy --port $PORT put urequests.py
+
+# Create lib directory and upload drivers
+ampy --port $PORT mkdir lib
+ampy --port $PORT put lib/stepper.py lib/stepper.py
+ampy --port $PORT put lib/rtc_handler.py lib/rtc_handler.py
+ampy --port $PORT put lib/notification.py lib/notification.py
+
+# Create data directory and upload data files
+ampy --port $PORT mkdir data
+ampy --port $PORT put data/schedule.json data/schedule.json
+ampy --port $PORT put data/last_fed.json data/last_fed.json
+ampy --port $PORT put data/next_feed.json data/next_feed.json
+ampy --port $PORT put data/quantity.json data/quantity.json
+
+# Upload UI directory (you may need to upload each file individually)
+ampy --port $PORT mkdir UI
+ampy --port $PORT put UI/index.html UI/index.html
+ampy --port $PORT put UI/feednow.html UI/feednow.html
+ampy --port $PORT put UI/setquantity.html UI/setquantity.html
+ampy --port $PORT put UI/setschedule.html UI/setschedule.html
+ampy --port $PORT mkdir UI/css
+ampy --port $PORT put UI/css/styles.css UI/css/styles.css
+ampy --port $PORT mkdir UI/assets
+ampy --port $PORT mkdir UI/assets/images
+# Add image files as needed
+`}
+\`\`\`
+
+Generated on: ${new Date().toISOString()}
+`;
+  
+  fs.writeFileSync(path.join(distDir, 'README.md'), readmeContent);
+  console.log('\n📄 Created README.md\n');
+  
+  console.log(`✅ Build complete! Files are in: ${distDir}\n`);
+  console.log(`📊 Total files: ${countFiles(distDir)}`);
+  console.log(`📦 Total size: ${getDirectorySize(distDir)} bytes\n`);
+}
+
+function countFiles(dir) {
+  let count = 0;
+  const entries = fs.readdirSync(dir, { withFileTypes: true });
+  
+  for (const entry of entries) {
+    if (entry.isDirectory()) {
+      count += countFiles(path.join(dir, entry.name));
+    } else {
+      count++;
+    }
+  }
+  
+  return count;
+}
+
+function getDirectorySize(dir) {
+  let size = 0;
+  const entries = fs.readdirSync(dir, { withFileTypes: true });
+  
+  for (const entry of entries) {
+    const fullPath = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      size += getDirectorySize(fullPath);
+    } else {
+      size += fs.statSync(fullPath).size;
+    }
+  }
+  
+  return size;
+}
+
+// Run the build
+build();

@@ -1,0 +1,20 @@
+{
+  "name": "fish-feeder-backend",
+  "version": "1.0.0",
+  "description": "ESP8266 Fish Feeder Backend - MicroPython",
+  "scripts": {
+    "build": "node build.js",
+    "clean": "if exist dist rmdir /s /q dist",
+    "build:battery": "node build.js battery",
+    "build:api": "node build.js api",
+    "download:deps": "curl -L https://raw.githubusercontent.com/miguelgrinberg/microdot/main/src/microdot/microdot.py -o microdot.py && curl -L https://raw.githubusercontent.com/micropython/micropython-lib/master/micropython/urequests/urequests.py -o urequests.py"
+  },
+  "keywords": [
+    "esp8266",
+    "micropython",
+    "fish-feeder"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {}
+}

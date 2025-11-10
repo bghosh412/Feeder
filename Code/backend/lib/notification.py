@@ -1,14 +1,17 @@
 # Notification handler using ntfy
-import urequests
 import json
 
 ntfy_topic = 'FF0x98854'
 
 # MicroPython-compatible notification sender
+# Try urequests (MicroPython) first, fall back to requests (standard Python)
 try:
     import urequests
 except ImportError:
-    urequests = None
+    try:
+        import requests as urequests
+    except ImportError:
+        urequests = None
 
 def send_ntfy_notification(message):
     if urequests is None:
