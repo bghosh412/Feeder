@@ -1,10 +1,13 @@
 const fs = require('fs');
 const path = require('path');
+const { execSync } = require('child_process');
 
 // Determine build mode from command line argument
 const mode = process.argv[2] || 'api'; // 'battery' or 'api' (default)
 
 const distDir = path.join(__dirname, 'dist');
+const frontendDir = path.join(__dirname, '..', 'frontend');
+const frontendDistDir = path.join(frontendDir, 'dist');
 
 // Files needed for both modes
 const commonFiles = [
@@ -88,8 +91,59 @@ function createDataFile(filePath, content) {
   console.log(`Created: ${filePath}`);
 }
 
+function buildFrontend() {
+  console.log('\n📦 Building frontend project...\n');
+  
+  // Check if frontend directory exists
+  if (!fs.existsSync(frontendDir)) {
+    console.warn('⚠️  Warning: Frontend directory not found, skipping frontend build');
+    return false;
+  }
+  
+  try {
+    // Build frontend
+    execSync('npm run build', { cwd: frontendDir, stdio: 'inherit' });
+    console.log('\n✅ Frontend build complete\n');
+    return true;
+  } catch (error) {
+    console.error('❌ Frontend build failed:', error.message);
+    return false;
+  }
+}
+
+function copyFrontendToUI() {
+  console.log('📁 Copying frontend dist to backend UI...\n');
+  
+  const uiDir = path.join(__dirname, 'UI');
+  
+  // Remove existing UI directory
+  if (fs.existsSync(uiDir)) {
+    fs.rmSync(uiDir, { recursive: true, force: true });
+  }
+  
+  // Copy frontend dist to UI
+  if (fs.existsSync(frontendDistDir)) {
+    copyDirectory(frontendDistDir, uiDir);
+    console.log('✅ Frontend copied to UI directory\n');
+    return true;
+  } else {
+    console.warn('⚠️  Warning: Frontend dist not found, skipping copy');
+    return false;
+  }
+}
+
 function build() {
-  console.log(`\n🚀 Building for ${mode.toUpperCase()} mode...\n`);
+  console.log(`\n🚀 Building Fish Feeder - ${mode.toUpperCase()} mode...\n`);
+  
+  // Step 1: Build frontend (for API mode only)
+  if (mode === 'api') {
+    const frontendBuilt = buildFrontend();
+    if (frontendBuilt) {
+      copyFrontendToUI();
+    }
+  }
+  
+  console.log('\n🔧 Building backend...\n');
   
   // Clean dist directory
   if (fs.existsSync(distDir)) {
