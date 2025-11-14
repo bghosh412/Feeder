@@ -1,18 +1,14 @@
 import gc
+import socket
 import services
 import last_fed_service
 import quantity_service
 import next_feed_service
-from microdot import Microdot, Response, send_file
 
-app = Microdot()
-
-# Collect garbage at startup
 gc.collect()
 
-# Manual JSON encoding helpers (no ujson dependency)
+# Manual JSON encoding
 def json_encode(obj):
-    """Simple JSON encoder for dict/list/str/int/bool/None"""
     if obj is None:
         return 'null'
     elif isinstance(obj, bool):
@@ -20,7 +16,6 @@ def json_encode(obj):
     elif isinstance(obj, (int, float)):
         return str(obj)
     elif isinstance(obj, str):
-        # Escape special characters
         escaped = obj.replace('\\', '\\\\').replace('"', '\\"').replace('\n', '\\n').replace('\r', '\\r').replace('\t', '\\t')
         return '"{}"'.format(escaped)
     elif isinstance(obj, dict):
@@ -33,176 +28,232 @@ def json_encode(obj):
         return '[' + ', '.join(items) + ']'
     return 'null'
 
-# Feed Now API endpoint
-@app.route('/api/feednow', methods=['POST'])
-def feed_now(request):
+def parse_simple_json(s):
+    """Very basic JSON parser"""
+    s = s.strip()
+    if s.startswith('{') and s.endswith('}'):
+        result = {}
+        content = s[1:-1].strip()
+        if content:
+            # Simple parser - works for basic key:value pairs
+            pairs = content.split(',')
+            for pair in pairs:
+                if ':' in pair:
+                    k, v = pair.split(':', 1)
+                    k = k.strip().strip('"')
+                    v = v.strip().strip('"')
+                    try:
+                        v = int(v)
+                    except:
+                        pass
+                    result[k] = v
+        return result
+    return {}
+
+def send_response(conn, status, content_type, body):
     gc.collect()
-    import time
-    import lib.notification
+    response = 'HTTP/1.1 {}\r\n'.format(status)
+    response += 'Content-Type: {}\r\n'.format(content_type)
+    response += 'Access-Control-Allow-Origin: *\r\n'
+    response += 'Access-Control-Allow-Methods: GET, POST, OPTIONS\r\n'
+    response += 'Access-Control-Allow-Headers: Content-Type\r\n'
+    response += 'Content-Length: {}\r\n'.format(len(body))
+    response += '\r\n'
+    conn.send(response.encode())
+    conn.send(body.encode() if isinstance(body, str) else body)
+    gc.collect()
+
+def handle_request(conn, request):
+    gc.collect()
     try:
-        quantity = quantity_service.read_quantity()
-        if quantity > 0:
-            quantity -= 1
-        quantity_service.write_quantity(quantity)
-        last_fed_service.write_last_fed_now()
-        now = time.localtime()
-        msg = "Feeding done at {:02d}:{:02d}:{:02d}. Feed remaining: {}".format(now[3], now[4], now[5], quantity)
-        lib.notification.send_ntfy_notification(msg)
-        gc.collect()
-        return json_encode({'status': 'ok', 'quantity': quantity})
-    except Exception as e:
-        gc.collect()
-        return Response(json_encode({'error': str(e)}), status=400)
-
-@app.route('/api/feednow', methods=['OPTIONS'])
-def feednow_options(request):
-    return ''
-
-# Quantity API endpoints
-@app.route('/api/quantity', methods=['GET'])
-def get_quantity(request):
-    gc.collect()
-    quantity = quantity_service.read_quantity()
-    return json_encode({'quantity': quantity})
-
-@app.route('/api/quantity', methods=['POST'])
-def set_quantity(request):
-    gc.collect()
-    import lib.notification
-    try:
-        data = request.json
-        value = data.get('quantity')
-        if value is not None:
-            success = quantity_service.write_quantity(value)
-            if success:
-                msg = "Remaining food quantity updated to {}".format(value)
-                lib.notification.send_ntfy_notification(msg)
-                gc.collect()
-                return json_encode({'status': 'ok'})
+        lines = request.split(b'\r\n')
+        if not lines:
+            return
+            
+        request_line = lines[0].decode()
+        parts = request_line.split()
+        if len(parts) < 2:
+            return
+            
+        method, path = parts[0], parts[1]
+        
+        # Parse body if POST
+        body_data = {}
+        if method == 'POST':
+            body_start = request.find(b'\r\n\r\n')
+            if body_start != -1:
+                body = request[body_start+4:].decode()
+                if body:
+                    body_data = parse_simple_json(body)
+        
+        # OPTIONS handling
+        if method == 'OPTIONS':
+            send_response(conn, '200 OK', 'text/plain', '')
+            return
+        
+        # Route handling
+        if path == '/api/feednow':
+            import time
+            import lib.notification
+            quantity = quantity_service.read_quantity()
+            if quantity > 0:
+                quantity -= 1
+            quantity_service.write_quantity(quantity)
+            last_fed_service.write_last_fed_now()
+            now = time.localtime()
+            msg = "Feeding done at {:02d}:{:02d}:{:02d}. Feed remaining: {}".format(now[3], now[4], now[5], quantity)
+            lib.notification.send_ntfy_notification(msg)
+            result = json_encode({'status': 'ok', 'quantity': quantity})
+            send_response(conn, '200 OK', 'application/json', result)
+            
+        elif path == '/api/quantity':
+            if method == 'GET':
+                quantity = quantity_service.read_quantity()
+                result = json_encode({'quantity': quantity})
+                send_response(conn, '200 OK', 'application/json', result)
             else:
+                import lib.notification
+                value = body_data.get('quantity')
+                if value is not None:
+                    quantity_service.write_quantity(value)
+                    msg = "Remaining food quantity updated to {}".format(value)
+                    lib.notification.send_ntfy_notification(msg)
+                    result = json_encode({'status': 'ok'})
+                    send_response(conn, '200 OK', 'application/json', result)
+                else:
+                    send_response(conn, '400 Bad Request', 'application/json', json_encode({'error': 'Missing quantity'}))
+                    
+        elif path == '/api/home':
+            quantity = quantity_service.read_quantity()
+            last_fed = last_fed_service.read_last_fed()
+            next_feed = next_feed_service.read_next_feed()
+            result = json_encode({
+                'connectionStatus': 'Online',
+                'feedRemaining': '{} more feed remaining'.format(quantity),
+                'lastFed': last_fed,
+                'batteryStatus': '40% of the Battery remaining',
+                'nextFeed': next_feed
+            })
+            send_response(conn, '200 OK', 'application/json', result)
+            
+        elif path == '/api/ping':
+            send_response(conn, '200 OK', 'application/json', json_encode({'status': 'ok'}))
+            
+        elif path == '/api/schedule':
+            if method == 'GET':
+                data = services.read_schedule()
+                result = json_encode(data) if data else json_encode({'error': 'Could not read schedule'})
+                send_response(conn, '200 OK', 'application/json', result)
+            else:
+                services.write_schedule(body_data)
+                send_response(conn, '200 OK', 'application/json', json_encode({'status': 'ok'}))
+                
+        elif path == '/api/lastfed':
+            if method == 'GET':
+                last_fed = last_fed_service.read_last_fed()
+                result = json_encode({'last_fed_time': last_fed}) if last_fed else json_encode({'error': 'Could not read'})
+                send_response(conn, '200 OK', 'application/json', result)
+            else:
+                last_fed_time = body_data.get('last_fed_time')
+                if last_fed_time:
+                    with open(last_fed_service.data_file, 'w') as f:
+                        f.write(last_fed_time)
+                    send_response(conn, '200 OK', 'application/json', json_encode({'status': 'ok'}))
+                else:
+                    send_response(conn, '400 Bad Request', 'application/json', json_encode({'error': 'Missing last_fed_time'}))
+                    
+        elif path == '/' or path == '/index.html':
+            try:
+                with open('UI/index.html', 'r') as f:
+                    send_response(conn, '200 OK', 'text/html', f.read())
+            except:
+                send_response(conn, '404 Not Found', 'text/plain', 'Not Found')
+                
+        else:
+            # Try to serve static file
+            try:
+                file_path = 'UI' + path
+                content_type = 'text/html'
+                if path.endswith('.css'):
+                    content_type = 'text/css'
+                elif path.endswith('.js'):
+                    content_type = 'application/javascript'
+                elif path.endswith('.png'):
+                    content_type = 'image/png'
+                elif path.endswith('.jpg') or path.endswith('.jpeg'):
+                    content_type = 'image/jpeg'
+                    
+                with open(file_path, 'rb') as f:
+                    content = f.read()
+                    send_response(conn, '200 OK', content_type, content)
+            except:
+                send_response(conn, '404 Not Found', 'text/plain', 'Not Found')
+        
+        gc.collect()
+    except Exception as e:
+        print('Error handling request:', e)
+        try:
+            send_response(conn, '500 Internal Server Error', 'application/json', json_encode({'error': str(e)}))
+        except:
+            pass
+
+class SimpleServer:
+    def __init__(self):
+        self.socket = None
+        
+    def run(self, host='0.0.0.0', port=5000):
+        addr = socket.getaddrinfo(host, port)[0][-1]
+        self.socket = socket.socket()
+        self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        self.socket.bind(addr)
+        self.socket.listen(5)
+        print('Server running on {}:{}'.format(host, port))
+        
+        while True:
+            try:
+                conn, addr = self.socket.accept()
+                print('Connection from', addr)
+                conn.settimeout(5.0)
+                
+                # Read request
+                request = b''
+                while True:
+                    try:
+                        chunk = conn.recv(1024)
+                        if not chunk:
+                            break
+                        request += chunk
+                        # Check if we have full request
+                        if b'\r\n\r\n' in request:
+                            # Check if there's a body
+                            if b'Content-Length:' in request:
+                                header_end = request.find(b'\r\n\r\n')
+                                headers = request[:header_end].decode()
+                                for line in headers.split('\r\n'):
+                                    if line.startswith('Content-Length:'):
+                                        content_length = int(line.split(':')[1].strip())
+                                        body_received = len(request) - header_end - 4
+                                        if body_received >= content_length:
+                                            break
+                            else:
+                                break
+                    except:
+                        break
+                
+                if request:
+                    handle_request(conn, request)
+                
+                conn.close()
                 gc.collect()
-                return Response(json_encode({'error': 'Write failed'}), status=500)
-        else:
-            gc.collect()
-            return Response(json_encode({'error': 'Missing quantity'}), status=400)
-    except Exception as e:
-        gc.collect()
-        return Response(json_encode({'error': str(e)}), status=400)
+            except Exception as e:
+                print('Server error:', e)
+                try:
+                    conn.close()
+                except:
+                    pass
+                gc.collect()
 
-@app.route('/api/quantity', methods=['OPTIONS'])
-def quantity_options(request):
-    return ''
-
-@app.route('/api/home', methods=['GET'])
-def get_home_data(request):
-    gc.collect()
-    connection_status = 'Online'
-    quantity = quantity_service.read_quantity()
-    feed_remaining = '{} more feed remaining'.format(quantity)
-    last_fed = last_fed_service.read_last_fed()
-    battery_status = '40% of the Battery remaining'
-    next_feed = next_feed_service.read_next_feed()
-    gc.collect()
-    return json_encode({
-        'connectionStatus': connection_status,
-        'feedRemaining': feed_remaining,
-        'lastFed': last_fed,
-        'batteryStatus': battery_status,
-        'nextFeed': next_feed
-    })
-
-@app.route('/api/home', methods=['OPTIONS'])
-def home_options(request):
-    return ''
-
-@app.route('/api/lastfed', methods=['GET'])
-def get_last_fed(request):
-    gc.collect()
-    last_fed = last_fed_service.read_last_fed()
-    if last_fed:
-        return json_encode({'last_fed_time': last_fed})
-    return Response(json_encode({'error': 'Could not read last fed time'}), status=500)
-
-@app.route('/api/lastfed', methods=['POST'])
-def set_last_fed(request):
-    gc.collect()
-    try:
-        data = request.json
-        last_fed_time = data.get('last_fed_time')
-        if last_fed_time:
-            with open(last_fed_service.data_file, 'w') as f:
-                f.write(last_fed_time)
-            gc.collect()
-            return json_encode({'status': 'ok'})
-        else:
-            gc.collect()
-            return Response(json_encode({'error': 'Missing last_fed_time'}), status=400)
-    except Exception as e:
-        gc.collect()
-        return Response(json_encode({'error': str(e)}), status=400)
-
-@app.route('/api/lastfed', methods=['OPTIONS'])
-def last_fed_options(request):
-    return ''
-
-@app.after_request
-def enable_cors(request, response):
-    response.headers['Access-Control-Allow-Origin'] = '*'
-    response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS'
-    response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
-    # Collect garbage after each request to free memory
-    gc.collect()
-    return response
-
-@app.route('/api/ping', methods=['GET'])
-def ping(request):
-    gc.collect()
-    return json_encode({'status': 'ok'})
-
-@app.route('/api/ping', methods=['OPTIONS'])
-def ping_options(request):
-    return ''
-
-@app.route('/api/schedule', methods=['GET'])
-def get_schedule(request):
-    gc.collect()
-    data = services.read_schedule()
-    if data:
-        return json_encode(data)
-    return Response(json_encode({'error': 'Could not read schedule'}), status=500)
-
-@app.route('/api/schedule', methods=['POST'])
-def set_schedule(request):
-    gc.collect()
-    try:
-        schedule_data = request.json
-        success = services.write_schedule(schedule_data)
-        if success:
-            gc.collect()
-            return json_encode({'status': 'ok'})
-        else:
-            gc.collect()
-            return Response(json_encode({'error': 'Write failed'}), status=500)
-    except Exception as e:
-        gc.collect()
-        return Response(json_encode({'error': str(e)}), status=400)
-
-@app.route('/api/schedule', methods=['OPTIONS'])
-def schedule_options(request):
-    return ''
-
-@app.route('/', methods=['GET'])
-def index(request):
-    gc.collect()
-    return send_file('UI/index.html')
-
-@app.route('/<path:path>', methods=['GET'])
-def static_files(request, path):
-    gc.collect()
-    try:
-        return send_file('UI/{}'.format(path))
-    except:
-        return Response('Not found', status=404)
+app = SimpleServer()
 
 if __name__ == '__main__':
-    app.run(port=5000)
+    app.run(host='0.0.0.0', port=5000)
