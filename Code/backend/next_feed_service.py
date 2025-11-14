@@ -1,20 +1,9 @@
-import ujson
-import time
+NEXT_FEED_FILE = "data/next_feed.txt"
 
-NEXT_FEED_FILE = "data/next_feed.json"
-
-# Read next feed time and return formatted string
 def read_next_feed():
     try:
-        # Try to open file, if it doesn't exist, return default
-        try:
-            f = open(NEXT_FEED_FILE, "r")
-            f.close()
-        except:
-            return "Not scheduled"
         with open(NEXT_FEED_FILE, "r") as f:
-            data = ujson.load(f)
-        raw_time = data.get("next_feed_time")
+            raw_time = f.read().strip()
         if not raw_time or raw_time == "Not scheduled":
             return "Not scheduled"
         # Parse and format manually from ISO string: YYYY-MM-DDTHH:MM:SS
@@ -35,16 +24,13 @@ def read_next_feed():
             return formatted
         except:
             return raw_time
-    except Exception as e:
-        print("Error reading next feed:", e)
+    except:
         return "Not scheduled"
 
-# Write next feed time (expects ISO string)
 def write_next_feed(iso_time):
     try:
         with open(NEXT_FEED_FILE, "w") as f:
-            ujson.dump({"next_feed_time": iso_time}, f)
+            f.write(iso_time)
         return True
-    except Exception as e:
-        print("Error writing next feed:", e)
+    except:
         return False

@@ -1,1 +1,0 @@
-{"feeding_times": [{"enabled": true, "hour": 9, "ampm": "PM", "minute": 0}, {"enabled": true, "hour": 7, "ampm": "AM", "minute": 0}, {"enabled": false, "hour": 6, "ampm": "PM", "minute": 0}], "days": {"Saturday": true, "Thursday": true, "Sunday": false, "Friday": true, "Monday": false, "Tuesday": false, "Wednesday": false}}

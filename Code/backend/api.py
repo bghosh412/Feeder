@@ -1,33 +1,58 @@
-import ujson
+import gc
 import services
 import last_fed_service
 import quantity_service
 import next_feed_service
 from microdot import Microdot, Response, send_file
-import time
-import lib.notification
 
 app = Microdot()
+
+# Collect garbage at startup
+gc.collect()
+
+# Manual JSON encoding helpers (no ujson dependency)
+def json_encode(obj):
+    """Simple JSON encoder for dict/list/str/int/bool/None"""
+    if obj is None:
+        return 'null'
+    elif isinstance(obj, bool):
+        return 'true' if obj else 'false'
+    elif isinstance(obj, (int, float)):
+        return str(obj)
+    elif isinstance(obj, str):
+        # Escape special characters
+        escaped = obj.replace('\\', '\\\\').replace('"', '\\"').replace('\n', '\\n').replace('\r', '\\r').replace('\t', '\\t')
+        return '"{}"'.format(escaped)
+    elif isinstance(obj, dict):
+        items = []
+        for k, v in obj.items():
+            items.append('"{}": {}'.format(k, json_encode(v)))
+        return '{' + ', '.join(items) + '}'
+    elif isinstance(obj, list):
+        items = [json_encode(item) for item in obj]
+        return '[' + ', '.join(items) + ']'
+    return 'null'
+
 # Feed Now API endpoint
 @app.route('/api/feednow', methods=['POST'])
 def feed_now(request):
+    gc.collect()
+    import time
+    import lib.notification
     try:
-        # Read current quantity
         quantity = quantity_service.read_quantity()
-        # Reduce by 1 if possible
         if quantity > 0:
             quantity -= 1
-        # Update quantity
         quantity_service.write_quantity(quantity)
-        # Update last fed time
         last_fed_service.write_last_fed_now()
-        # Send ntfy notification
         now = time.localtime()
         msg = "Feeding done at {:02d}:{:02d}:{:02d}. Feed remaining: {}".format(now[3], now[4], now[5], quantity)
         lib.notification.send_ntfy_notification(msg)
-        return ujson.dumps({'status': 'ok', 'quantity': quantity})
+        gc.collect()
+        return json_encode({'status': 'ok', 'quantity': quantity})
     except Exception as e:
-        return Response(ujson.dumps({'error': str(e)}), status=400)
+        gc.collect()
+        return Response(json_encode({'error': str(e)}), status=400)
 
 @app.route('/api/feednow', methods=['OPTIONS'])
 def feednow_options(request):
@@ -36,27 +61,33 @@ def feednow_options(request):
 # Quantity API endpoints
 @app.route('/api/quantity', methods=['GET'])
 def get_quantity(request):
+    gc.collect()
     quantity = quantity_service.read_quantity()
-    return ujson.dumps({'quantity': quantity})
+    return json_encode({'quantity': quantity})
 
 @app.route('/api/quantity', methods=['POST'])
 def set_quantity(request):
+    gc.collect()
+    import lib.notification
     try:
         data = request.json
         value = data.get('quantity')
         if value is not None:
             success = quantity_service.write_quantity(value)
             if success:
-                # Send ntfy notification
                 msg = "Remaining food quantity updated to {}".format(value)
                 lib.notification.send_ntfy_notification(msg)
-                return ujson.dumps({'status': 'ok'})
+                gc.collect()
+                return json_encode({'status': 'ok'})
             else:
-                return Response(ujson.dumps({'error': 'Write failed'}), status=500)
+                gc.collect()
+                return Response(json_encode({'error': 'Write failed'}), status=500)
         else:
-            return Response(ujson.dumps({'error': 'Missing quantity'}), status=400)
+            gc.collect()
+            return Response(json_encode({'error': 'Missing quantity'}), status=400)
     except Exception as e:
-        return Response(ujson.dumps({'error': str(e)}), status=400)
+        gc.collect()
+        return Response(json_encode({'error': str(e)}), status=400)
 
 @app.route('/api/quantity', methods=['OPTIONS'])
 def quantity_options(request):
@@ -64,18 +95,15 @@ def quantity_options(request):
 
 @app.route('/api/home', methods=['GET'])
 def get_home_data(request):
-    # Connection status is always ok if this endpoint is reachable
+    gc.collect()
     connection_status = 'Online'
-    # Feed remaining: read from quantity_service
     quantity = quantity_service.read_quantity()
-    feed_remaining = f'{quantity} more feed remaining'
-    # Last fed time
+    feed_remaining = '{} more feed remaining'.format(quantity)
     last_fed = last_fed_service.read_last_fed()
-    # Battery status: placeholder, replace with actual logic if available
     battery_status = '40% of the Battery remaining'
-    # Next feed: read from next_feed_service
     next_feed = next_feed_service.read_next_feed()
-    return ujson.dumps({
+    gc.collect()
+    return json_encode({
         'connectionStatus': connection_status,
         'feedRemaining': feed_remaining,
         'lastFed': last_fed,
@@ -86,27 +114,32 @@ def get_home_data(request):
 @app.route('/api/home', methods=['OPTIONS'])
 def home_options(request):
     return ''
+
 @app.route('/api/lastfed', methods=['GET'])
 def get_last_fed(request):
+    gc.collect()
     last_fed = last_fed_service.read_last_fed()
     if last_fed:
-        return ujson.dumps({'last_fed_time': last_fed})
-    return Response(ujson.dumps({'error': 'Could not read last fed time'}), status=500)
+        return json_encode({'last_fed_time': last_fed})
+    return Response(json_encode({'error': 'Could not read last fed time'}), status=500)
 
 @app.route('/api/lastfed', methods=['POST'])
 def set_last_fed(request):
+    gc.collect()
     try:
         data = request.json
         last_fed_time = data.get('last_fed_time')
         if last_fed_time:
-            # Write the ISO string directly to the file
             with open(last_fed_service.data_file, 'w') as f:
-                ujson.dump({'last_fed_time': last_fed_time}, f)
-            return ujson.dumps({'status': 'ok'})
+                f.write(last_fed_time)
+            gc.collect()
+            return json_encode({'status': 'ok'})
         else:
-            return Response(ujson.dumps({'error': 'Missing last_fed_time'}), status=400)
+            gc.collect()
+            return Response(json_encode({'error': 'Missing last_fed_time'}), status=400)
     except Exception as e:
-        return Response(ujson.dumps({'error': str(e)}), status=400)
+        gc.collect()
+        return Response(json_encode({'error': str(e)}), status=400)
 
 @app.route('/api/lastfed', methods=['OPTIONS'])
 def last_fed_options(request):
@@ -117,11 +150,14 @@ def enable_cors(request, response):
     response.headers['Access-Control-Allow-Origin'] = '*'
     response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS'
     response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
+    # Collect garbage after each request to free memory
+    gc.collect()
     return response
 
 @app.route('/api/ping', methods=['GET'])
 def ping(request):
-    return ujson.dumps({'status': 'ok'})
+    gc.collect()
+    return json_encode({'status': 'ok'})
 
 @app.route('/api/ping', methods=['OPTIONS'])
 def ping_options(request):
@@ -129,27 +165,27 @@ def ping_options(request):
 
 @app.route('/api/schedule', methods=['GET'])
 def get_schedule(request):
+    gc.collect()
     data = services.read_schedule()
     if data:
-        return ujson.dumps(data)
-    return Response(ujson.dumps({'error': 'Could not read schedule'}), status=500)
+        return json_encode(data)
+    return Response(json_encode({'error': 'Could not read schedule'}), status=500)
 
 @app.route('/api/schedule', methods=['POST'])
 def set_schedule(request):
+    gc.collect()
     try:
-        print("Received POST request to /api/schedule")
-        print("Request body:", request.body)
         schedule_data = request.json
-        print("Parsed JSON:", schedule_data)
         success = services.write_schedule(schedule_data)
-        print("Write result:", success)
         if success:
-            return ujson.dumps({'status': 'ok'})
+            gc.collect()
+            return json_encode({'status': 'ok'})
         else:
-            return Response(ujson.dumps({'error': 'Write failed'}), status=500)
+            gc.collect()
+            return Response(json_encode({'error': 'Write failed'}), status=500)
     except Exception as e:
-        print("Error in set_schedule:", str(e))
-        return Response(ujson.dumps({'error': str(e)}), status=400)
+        gc.collect()
+        return Response(json_encode({'error': str(e)}), status=400)
 
 @app.route('/api/schedule', methods=['OPTIONS'])
 def schedule_options(request):
@@ -157,14 +193,16 @@ def schedule_options(request):
 
 @app.route('/', methods=['GET'])
 def index(request):
+    gc.collect()
     return send_file('UI/index.html')
 
 @app.route('/<path:path>', methods=['GET'])
 def static_files(request, path):
+    gc.collect()
     try:
-        return send_file(f'UI/{path}')
+        return send_file('UI/{}'.format(path))
     except:
         return Response('Not found', status=404)
 
 if __name__ == '__main__':
-    app.run(debug=True, port=5000)
+    app.run(port=5000)

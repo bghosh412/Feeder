@@ -37,10 +37,10 @@ const apiFiles = [
 
 // Data files (empty templates for API mode)
 const dataFiles = [
-  { name: 'data/schedule.json', content: '{"feeding_times": [], "days": {}}' },
-  { name: 'data/last_fed.json', content: '{"last_fed_time": null}' },
-  { name: 'data/next_feed.json', content: '{"next_feed": "Not scheduled"}' },
-  { name: 'data/quantity.json', content: '{"quantity": 10}' }
+  { name: 'data/schedule.txt', content: 'times=\ndays=' },
+  { name: 'data/last_fed.txt', content: '' },
+  { name: 'data/next_feed.txt', content: 'Not scheduled' },
+  { name: 'data/quantity.txt', content: '10' }
 ];
 
 // UI directory (copy as is for API mode)
@@ -153,37 +153,37 @@ function build() {
   
   createDirectory(distDir);
   
-  // Select files based on mode
-  const filesToCopy = mode === 'battery' ? batteryFiles : apiFiles;
-  
-  // Copy Python files
-  filesToCopy.forEach(file => {
-    const src = path.join(__dirname, file);
-    const dest = path.join(distDir, file);
-    
-    if (fs.existsSync(src)) {
-      copyFile(src, dest);
-    } else {
-      console.warn(`⚠️  Warning: ${file} not found`);
+
+
+  // Copy all .py files from backend and subfolders to dist, preserving structure
+  function copyAllPyFiles(srcDir, destDir, relPath = '') {
+    const entries = fs.readdirSync(srcDir, { withFileTypes: true });
+    for (const entry of entries) {
+      const srcPath = path.join(srcDir, entry.name);
+      const destPath = path.join(destDir, relPath, entry.name);
+      if (entry.isDirectory()) {
+        copyAllPyFiles(srcPath, destDir, path.join(relPath, entry.name));
+      } else if (entry.name.endsWith('.py')) {
+        copyFile(srcPath, destPath);
+      }
     }
-  });
-  
-  // For API mode, copy UI directory and create/copy data files
+  }
+  copyAllPyFiles(__dirname, distDir);
+
+  // For API mode, copy UI directory and create/copy data files into dist
   if (mode === 'api') {
     console.log('\n📁 Copying UI directory...\n');
     const uiSrc = path.join(__dirname, uiDir);
     const uiDest = path.join(distDir, uiDir);
-    
     if (fs.existsSync(uiSrc)) {
       copyDirectory(uiSrc, uiDest);
     } else {
       console.warn(`⚠️  Warning: ${uiDir} directory not found`);
     }
-    
+
     console.log('\n📝 Copying/Creating data files...\n');
     const dataDir = path.join(__dirname, 'data');
     const dataDestDir = path.join(distDir, 'data');
-    
     // Copy data directory if it exists, otherwise create defaults
     if (fs.existsSync(dataDir)) {
       console.log('Found existing data directory, copying...');

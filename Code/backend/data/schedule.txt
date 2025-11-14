@@ -1,0 +1,2 @@
+times=09:00:PM,07:00:AM
+days=Saturday,Thursday,Friday
