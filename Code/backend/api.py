@@ -1,9 +1,13 @@
 import gc
 import socket
+import sys
 import services
 import last_fed_service
 import quantity_service
 import next_feed_service
+
+# Detect if running on MicroPython or CPython
+IS_MICROPYTHON = hasattr(sys, 'implementation') and sys.implementation.name == 'micropython'
 
 gc.collect()
 
@@ -52,39 +56,65 @@ def parse_simple_json(s):
 
 def send_response(conn, status, content_type, body):
     gc.collect()
-    response = 'HTTP/1.1 {}\r\n'.format(status)
-    response += 'Content-Type: {}\r\n'.format(content_type)
-    response += 'Access-Control-Allow-Origin: *\r\n'
-    response += 'Access-Control-Allow-Methods: GET, POST, OPTIONS\r\n'
-    response += 'Access-Control-Allow-Headers: Content-Type\r\n'
-    response += 'Content-Length: {}\r\n'.format(len(body))
-    response += '\r\n'
-    conn.send(response.encode())
-    conn.send(body.encode() if isinstance(body, str) else body)
+    try:
+        # Ensure body is bytes
+        if isinstance(body, str):
+            body_bytes = body.encode('utf-8')
+        else:
+            body_bytes = body
+        
+        # Build response headers
+        response = 'HTTP/1.1 {}\r\n'.format(status)
+        response += 'Content-Type: {}\r\n'.format(content_type)
+        response += 'Access-Control-Allow-Origin: *\r\n'
+        response += 'Access-Control-Allow-Methods: GET, POST, OPTIONS\r\n'
+        response += 'Access-Control-Allow-Headers: Content-Type\r\n'
+        response += 'Connection: close\r\n'
+        response += 'Content-Length: {}\r\n'.format(len(body_bytes))
+        response += '\r\n'
+        
+        # Send complete response (headers + body)
+        full_response = response.encode('utf-8') + body_bytes
+        
+        # Use send() for MicroPython, sendall() for CPython
+        if IS_MICROPYTHON:
+            conn.send(full_response)
+        else:
+            conn.sendall(full_response)
+    except Exception as e:
+        print('Error sending response:', e)
+        import traceback
+        traceback.print_exc()
     gc.collect()
 
 def handle_request(conn, request):
     gc.collect()
     try:
         lines = request.split(b'\r\n')
-        if not lines:
+        if not lines or len(lines[0]) == 0:
+            print('Empty request')
             return
             
-        request_line = lines[0].decode()
+        request_line = lines[0].decode('utf-8', 'ignore')
         parts = request_line.split()
         if len(parts) < 2:
+            print('Invalid request line:', request_line)
             return
             
         method, path = parts[0], parts[1]
+        print('Request: {} {}'.format(method, path))
         
         # Parse body if POST
         body_data = {}
         if method == 'POST':
             body_start = request.find(b'\r\n\r\n')
             if body_start != -1:
-                body = request[body_start+4:].decode()
-                if body:
-                    body_data = parse_simple_json(body)
+                try:
+                    body = request[body_start+4:].decode('utf-8', 'ignore')
+                    if body:
+                        body_data = parse_simple_json(body)
+                except Exception as e:
+                    print('Error parsing body:', e)
         
         # OPTIONS handling
         if method == 'OPTIONS':
@@ -165,8 +195,10 @@ def handle_request(conn, request):
         elif path == '/' or path == '/index.html':
             try:
                 with open('UI/index.html', 'r') as f:
-                    send_response(conn, '200 OK', 'text/html', f.read())
-            except:
+                    content = f.read()
+                    send_response(conn, '200 OK', 'text/html; charset=utf-8', content)
+            except Exception as e:
+                print('Error serving index.html:', e)
                 send_response(conn, '404 Not Found', 'text/plain', 'Not Found')
                 
         else:
@@ -175,18 +207,22 @@ def handle_request(conn, request):
                 file_path = 'UI' + path
                 content_type = 'text/html'
                 if path.endswith('.css'):
-                    content_type = 'text/css'
+                    content_type = 'text/css; charset=utf-8'
                 elif path.endswith('.js'):
-                    content_type = 'application/javascript'
+                    content_type = 'application/javascript; charset=utf-8'
                 elif path.endswith('.png'):
                     content_type = 'image/png'
                 elif path.endswith('.jpg') or path.endswith('.jpeg'):
                     content_type = 'image/jpeg'
-                    
+                elif path.endswith('.html'):
+                    content_type = 'text/html; charset=utf-8'
+                
+                print('Serving file:', file_path)
                 with open(file_path, 'rb') as f:
                     content = f.read()
                     send_response(conn, '200 OK', content_type, content)
-            except:
+            except Exception as e:
+                print('Error serving {}: {}'.format(file_path, e))
                 send_response(conn, '404 Not Found', 'text/plain', 'Not Found')
         
         gc.collect()
@@ -202,55 +238,78 @@ class SimpleServer:
         self.socket = None
         
     def run(self, host='0.0.0.0', port=5000):
+        import sys
         addr = socket.getaddrinfo(host, port)[0][-1]
         self.socket = socket.socket()
         self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.socket.bind(addr)
         self.socket.listen(5)
         print('Server running on {}:{}'.format(host, port))
+        sys.stdout.flush()
         
         while True:
+            conn = None
             try:
                 conn, addr = self.socket.accept()
                 print('Connection from', addr)
-                conn.settimeout(5.0)
+                conn.settimeout(3.0)
                 
-                # Read request
+                # Read request with proper buffering
                 request = b''
+                content_length = 0
+                headers_complete = False
+                
                 while True:
                     try:
-                        chunk = conn.recv(1024)
+                        chunk = conn.recv(512)
                         if not chunk:
                             break
                         request += chunk
-                        # Check if we have full request
-                        if b'\r\n\r\n' in request:
-                            # Check if there's a body
-                            if b'Content-Length:' in request:
-                                header_end = request.find(b'\r\n\r\n')
-                                headers = request[:header_end].decode()
-                                for line in headers.split('\r\n'):
-                                    if line.startswith('Content-Length:'):
-                                        content_length = int(line.split(':')[1].strip())
-                                        body_received = len(request) - header_end - 4
-                                        if body_received >= content_length:
-                                            break
-                            else:
+                        
+                        # Check if headers are complete
+                        if not headers_complete and b'\r\n\r\n' in request:
+                            headers_complete = True
+                            header_end = request.find(b'\r\n\r\n')
+                            headers_part = request[:header_end].decode('utf-8', 'ignore')
+                            
+                            # Parse Content-Length if present
+                            for line in headers_part.split('\r\n'):
+                                if line.lower().startswith('content-length:'):
+                                    content_length = int(line.split(':', 1)[1].strip())
+                                    break
+                            
+                            # If no body expected, we're done
+                            if content_length == 0:
                                 break
-                    except:
+                        
+                        # If headers complete and we have body, check if body is complete
+                        if headers_complete and content_length > 0:
+                            body_start = request.find(b'\r\n\r\n') + 4
+                            body_received = len(request) - body_start
+                            if body_received >= content_length:
+                                break
+                        
+                        # Prevent reading too much
+                        if len(request) > 8192:
+                            break
+                            
+                    except OSError:
+                        # Timeout or connection error
                         break
                 
                 if request:
                     handle_request(conn, request)
+                else:
+                    print('Empty request received')
                 
-                conn.close()
-                gc.collect()
             except Exception as e:
                 print('Server error:', e)
-                try:
-                    conn.close()
-                except:
-                    pass
+            finally:
+                if conn:
+                    try:
+                        conn.close()
+                    except:
+                        pass
                 gc.collect()
 
 app = SimpleServer()
