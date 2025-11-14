@@ -15,15 +15,17 @@ except ImportError:
 
 def send_ntfy_notification(message):
     if urequests is None:
-        print('urequests not available, cannot send notification')
+        print('urequests not available, skipping notification')
         return
     url = 'https://ntfy.sh/' + ntfy_topic
     headers = {'Title': 'Auto Feeder'}
     try:
         r = urequests.post(url, data=message, headers=headers)
         r.close()
+        print('Notification sent:', message)
     except Exception as e:
         print('ntfy notification error:', e)
+        # Don't fail if notification fails
 
 class NotificationService:
     """Send push notifications via ntfy.sh"""

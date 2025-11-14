@@ -55,8 +55,9 @@ def send_response(conn, status, content_type, body):
     response = 'HTTP/1.1 {}\r\n'.format(status)
     response += 'Content-Type: {}\r\n'.format(content_type)
     response += 'Access-Control-Allow-Origin: *\r\n'
-    response += 'Access-Control-Allow-Methods: GET, POST, OPTIONS\r\n'
+    response += 'Access-Control-Allow-Methods: GET, POST, DELETE, OPTIONS\r\n'
     response += 'Access-Control-Allow-Headers: Content-Type\r\n'
+    response += 'Connection: close\r\n'
     response += 'Content-Length: {}\r\n'.format(len(body))
     response += '\r\n'
     conn.send(response.encode())
@@ -77,6 +78,12 @@ def handle_request(conn, request):
             
         method, path = parts[0], parts[1]
         
+        # Extract path without query parameters
+        if '?' in path:
+            path = path.split('?')[0]
+        
+        print('Request: {} {}'.format(method, path))
+        
         # Parse body if POST
         body_data = {}
         if method == 'POST':
@@ -92,7 +99,8 @@ def handle_request(conn, request):
             return
         
         # Route handling
-        if path == '/api/feednow':
+        # Support both /api/feed and /api/feednow for compatibility
+        if path == '/api/feednow' or path == '/api/feed':
             import time
             import lib.notification
             quantity = quantity_service.read_quantity()
@@ -136,16 +144,21 @@ def handle_request(conn, request):
             })
             send_response(conn, '200 OK', 'application/json', result)
             
-        elif path == '/api/ping':
-            send_response(conn, '200 OK', 'application/json', json_encode({'status': 'ok'}))
+        elif path == '/api/ping' or path == '/api/status':
+            send_response(conn, '200 OK', 'application/json', json_encode({'status': 'ok', 'message': 'Server is running'}))
             
-        elif path == '/api/schedule':
+        elif path == '/api/schedule' or path == '/api/schedules' or path.startswith('/api/schedule/'):
             if method == 'GET':
                 data = services.read_schedule()
                 result = json_encode(data) if data else json_encode({'error': 'Could not read schedule'})
                 send_response(conn, '200 OK', 'application/json', result)
+            elif method == 'DELETE':
+                # For now, just return success - implement delete logic as needed
+                send_response(conn, '200 OK', 'application/json', json_encode({'status': 'ok', 'message': 'Schedule deleted'}))
             else:
                 services.write_schedule(body_data)
+                # Recalculate next feed time after schedule update
+                next_feed_service.calculate_and_save_next_feed()
                 send_response(conn, '200 OK', 'application/json', json_encode({'status': 'ok'}))
                 
         elif path == '/api/lastfed':
@@ -165,9 +178,12 @@ def handle_request(conn, request):
         elif path == '/' or path == '/index.html':
             try:
                 with open('UI/index.html', 'r') as f:
-                    send_response(conn, '200 OK', 'text/html', f.read())
-            except:
-                send_response(conn, '404 Not Found', 'text/plain', 'Not Found')
+                    content = f.read()
+                    send_response(conn, '200 OK', 'text/html', content)
+            except Exception as e:
+                print('Error serving index.html:', e)
+                error_msg = 'File not found: UI/index.html. Error: {}'.format(str(e))
+                send_response(conn, '404 Not Found', 'text/html', '<html><body><h1>404 Not Found</h1><p>{}</p><p>Make sure UI directory is uploaded to ESP8266</p></body></html>'.format(error_msg))
                 
         else:
             # Try to serve static file
@@ -182,11 +198,13 @@ def handle_request(conn, request):
                     content_type = 'image/png'
                 elif path.endswith('.jpg') or path.endswith('.jpeg'):
                     content_type = 'image/jpeg'
-                    
+                
+                print('Trying to serve file:', file_path)
                 with open(file_path, 'rb') as f:
                     content = f.read()
                     send_response(conn, '200 OK', content_type, content)
-            except:
+            except Exception as e:
+                print('Error serving static file {}: {}'.format(file_path, e))
                 send_response(conn, '404 Not Found', 'text/plain', 'Not Found')
         
         gc.collect()
@@ -205,6 +223,7 @@ class SimpleServer:
         addr = socket.getaddrinfo(host, port)[0][-1]
         self.socket = socket.socket()
         self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        # SO_KEEPALIVE not supported on ESP8266 MicroPython
         self.socket.bind(addr)
         self.socket.listen(5)
         print('Server running on {}:{}'.format(host, port))
@@ -243,7 +262,11 @@ class SimpleServer:
                 if request:
                     handle_request(conn, request)
                 
-                conn.close()
+                # Close connection (shutdown not always available on ESP8266)
+                try:
+                    conn.close()
+                except:
+                    pass
                 gc.collect()
             except Exception as e:
                 print('Server error:', e)

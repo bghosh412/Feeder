@@ -6,8 +6,7 @@
     "build": "node build.js",
     "clean": "if exist dist rmdir /s /q dist",
     "build:battery": "node build.js battery",
-    "build:api": "node build.js api",
-    "download:deps": "curl -L https://raw.githubusercontent.com/miguelgrinberg/microdot/main/src/microdot/microdot.py -o microdot.py && curl -L https://raw.githubusercontent.com/micropython/micropython-lib/master/micropython/urequests/urequests.py -o urequests.py"
+    "build:api": "node build.js api"
   },
   "keywords": [
     "esp8266",

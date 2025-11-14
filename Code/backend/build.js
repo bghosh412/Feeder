@@ -30,8 +30,11 @@ const apiFiles = [
   'last_fed_service.py',
   'next_feed_service.py',
   'quantity_service.py',
-  'microdot.py',
   'urequests.py',
+  'boot.py',
+  'wifi_manager.py',
+  'main.py',
+  'wifi.dat',
   ...commonFiles
 ];
 
@@ -156,19 +159,41 @@ function build() {
 
 
   // Copy all .py files from backend and subfolders to dist, preserving structure
+  // Exclude microdot files and dist folder itself
+  const excludeFiles = ['microdot.py', 'microdot_asyncio.py', 'microdot_utemplate.py', 
+                         'microdot_utils.py', 'microdot_websocket.py'];
+  const excludeDirs = ['dist', 'node_modules', '__pycache__'];
+  
   function copyAllPyFiles(srcDir, destDir, relPath = '') {
     const entries = fs.readdirSync(srcDir, { withFileTypes: true });
     for (const entry of entries) {
       const srcPath = path.join(srcDir, entry.name);
       const destPath = path.join(destDir, relPath, entry.name);
+      
+      // Skip excluded files
+      if (excludeFiles.includes(entry.name)) {
+        continue;
+      }
+      
       if (entry.isDirectory()) {
+        // Skip excluded directories
+        if (excludeDirs.includes(entry.name)) {
+          continue;
+        }
         copyAllPyFiles(srcPath, destDir, path.join(relPath, entry.name));
-      } else if (entry.name.endsWith('.py')) {
+      } else if (entry.name.endsWith('.py') || entry.name === 'wifi.dat') {
         copyFile(srcPath, destPath);
       }
     }
   }
   copyAllPyFiles(__dirname, distDir);
+  
+  // Ensure wifi.dat is always copied if it exists
+  const wifiDatSrc = path.join(__dirname, 'wifi.dat');
+  const wifiDatDest = path.join(distDir, 'wifi.dat');
+  if (fs.existsSync(wifiDatSrc)) {
+    copyFile(wifiDatSrc, wifiDatDest);
+  }
 
   // For API mode, copy UI directory and create/copy data files into dist
   if (mode === 'api') {
