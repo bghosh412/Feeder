@@ -29,13 +29,30 @@ def json_encode(obj):
     return 'null'
 
 def parse_simple_json(s):
-    """Very basic JSON parser"""
+    """Improved JSON parser for nested structures"""
     s = s.strip()
+    if not s:
+        return {}
+    
+    # Try to use ujson if available (MicroPython)
+    try:
+        import ujson
+        return ujson.loads(s)
+    except:
+        pass
+    
+    # Try standard json (Python)
+    try:
+        import json
+        return json.loads(s)
+    except:
+        pass
+    
+    # Fallback: basic parser for simple key:value pairs only
     if s.startswith('{') and s.endswith('}'):
         result = {}
         content = s[1:-1].strip()
         if content:
-            # Simple parser - works for basic key:value pairs
             pairs = content.split(',')
             for pair in pairs:
                 if ':' in pair:
@@ -91,7 +108,10 @@ def handle_request(conn, request):
             if body_start != -1:
                 body = request[body_start+4:].decode()
                 if body:
+                    print('Raw body:', body)
                     body_data = parse_simple_json(body)
+                    print('Parsed body_data:', body_data)
+                    print('Type of body_data:', type(body_data))
         
         # OPTIONS handling
         if method == 'OPTIONS':
@@ -156,10 +176,14 @@ def handle_request(conn, request):
                 # For now, just return success - implement delete logic as needed
                 send_response(conn, '200 OK', 'application/json', json_encode({'status': 'ok', 'message': 'Schedule deleted'}))
             else:
-                services.write_schedule(body_data)
-                # Recalculate next feed time after schedule update
-                next_feed_service.calculate_and_save_next_feed()
-                send_response(conn, '200 OK', 'application/json', json_encode({'status': 'ok'}))
+                # write_schedule already calculates and saves next feed time
+                print('Received schedule data:', body_data)
+                result = services.write_schedule(body_data)
+                if result:
+                    send_response(conn, '200 OK', 'application/json', json_encode({'status': 'ok'}))
+                else:
+                    print('Failed to write schedule')
+                    send_response(conn, '500 Internal Server Error', 'application/json', json_encode({'error': 'Failed to save schedule'}))
                 
         elif path == '/api/lastfed':
             if method == 'GET':
@@ -177,13 +201,32 @@ def handle_request(conn, request):
                     
         elif path == '/' or path == '/index.html':
             try:
-                with open('UI/index.html', 'r') as f:
-                    content = f.read()
-                    send_response(conn, '200 OK', 'text/html', content)
+                # Stream file in chunks to avoid memory issues
+                with open('UI/index.html', 'rb') as f:
+                    # Get file size
+                    import os
+                    file_size = os.stat('UI/index.html')[6]
+                    
+                    # Send headers
+                    response = 'HTTP/1.1 200 OK\r\n'
+                    response += 'Content-Type: text/html\r\n'
+                    response += 'Access-Control-Allow-Origin: *\r\n'
+                    response += 'Connection: close\r\n'
+                    response += 'Content-Length: {}\r\n'.format(file_size)
+                    response += '\r\n'
+                    conn.send(response.encode())
+                    
+                    # Stream file in 512 byte chunks
+                    while True:
+                        chunk = f.read(512)
+                        if not chunk:
+                            break
+                        conn.send(chunk)
+                        gc.collect()
             except Exception as e:
                 print('Error serving index.html:', e)
-                error_msg = 'File not found: UI/index.html. Error: {}'.format(str(e))
-                send_response(conn, '404 Not Found', 'text/html', '<html><body><h1>404 Not Found</h1><p>{}</p><p>Make sure UI directory is uploaded to ESP8266</p></body></html>'.format(error_msg))
+                error_msg = 'Error: {}'.format(str(e))
+                send_response(conn, '500 Internal Server Error', 'text/html', '<html><body><h1>Error</h1><p>{}</p></body></html>'.format(error_msg))
                 
         else:
             # Try to serve static file
@@ -199,12 +242,32 @@ def handle_request(conn, request):
                 elif path.endswith('.jpg') or path.endswith('.jpeg'):
                     content_type = 'image/jpeg'
                 
-                print('Trying to serve file:', file_path)
+                print('Serving file:', file_path)
+                
+                # Stream file in chunks to avoid memory issues
+                import os
+                file_size = os.stat(file_path)[6]
+                
+                # Send headers
+                response = 'HTTP/1.1 200 OK\r\n'
+                response += 'Content-Type: {}\r\n'.format(content_type)
+                response += 'Access-Control-Allow-Origin: *\r\n'
+                response += 'Connection: close\r\n'
+                response += 'Content-Length: {}\r\n'.format(file_size)
+                response += '\r\n'
+                conn.send(response.encode())
+                
+                # Stream file in 512 byte chunks
                 with open(file_path, 'rb') as f:
-                    content = f.read()
-                    send_response(conn, '200 OK', content_type, content)
+                    while True:
+                        chunk = f.read(512)
+                        if not chunk:
+                            break
+                        conn.send(chunk)
+                        gc.collect()
+                        
             except Exception as e:
-                print('Error serving static file {}: {}'.format(file_path, e))
+                print('Error serving file {}: {}'.format(file_path, e))
                 send_response(conn, '404 Not Found', 'text/plain', 'Not Found')
         
         gc.collect()
@@ -220,13 +283,43 @@ class SimpleServer:
         self.socket = None
         
     def run(self, host='0.0.0.0', port=5000):
+        # Get actual IP address if host is 0.0.0.0
+        if host == '0.0.0.0':
+            try:
+                import network
+                sta = network.WLAN(network.STA_IF)
+                if sta.isconnected():
+                    actual_ip = sta.ifconfig()[0]
+                    print('Server will run on {}:{}'.format(actual_ip, port))
+                else:
+                    actual_ip = '0.0.0.0'
+                    print('Not connected to WiFi, using 0.0.0.0')
+            except:
+                actual_ip = '0.0.0.0'
+                print('Could not determine IP, using 0.0.0.0')
+        else:
+            actual_ip = host
+        
         addr = socket.getaddrinfo(host, port)[0][-1]
         self.socket = socket.socket()
         self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         # SO_KEEPALIVE not supported on ESP8266 MicroPython
         self.socket.bind(addr)
         self.socket.listen(5)
-        print('Server running on {}:{}'.format(host, port))
+        print('Server running on {}:{}'.format(actual_ip, port))
+        
+        # Send notification with server URL
+        try:
+            import lib.notification
+            url = 'http://{}:{}'.format(actual_ip, port)
+            import time
+            now = time.localtime()
+            time_str = "{:02d}:{:02d}:{:02d}".format(now[3], now[4], now[5])
+            msg = 'Feeder started at {} and can be accessed at {}'.format(time_str, url)
+            lib.notification.send_ntfy_notification(msg)
+            print('Startup notification sent:', msg)
+        except Exception as e:
+            print('Could not send startup notification:', e)
         
         while True:
             try:

@@ -4,12 +4,12 @@
 			"path": "."
 		},
 		{
-			"name": "serial://dev/ttyUSB0",
-			"uri": "serial://%2fdev%2fttyusb0/"
+			"name": "serial://dev/ttyACM0",
+			"uri": "serial://%2fdev%2fttyacm0/"
 		},
 		{
-			"name": "serial://dev/ttyUSB0",
-			"uri": "serial://%2fdev%2fttyusb0/"
+			"name": "serial://dev/ttyACM0",
+			"uri": "serial://%2fdev%2fttyacm0/"
 		}
 	],
 	"settings": {}

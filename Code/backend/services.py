@@ -60,6 +60,8 @@ def write_schedule(schedule_data):
     Returns: True if successful, False otherwise
     """
     try:
+        print('write_schedule received:', schedule_data)
+        
         # Build times string
         feeding_times = [t for t in schedule_data.get("feeding_times", []) if t.get("enabled")]
         times_list = []
@@ -70,14 +72,20 @@ def write_schedule(schedule_data):
             times_list.append("{:02d}:{:02d}:{}".format(hour, minute, ampm))
         times_str = ','.join(times_list)
         
+        print('Times string:', times_str)
+        
         # Build days string
         enabled_days = [day for day, enabled in schedule_data.get("days", {}).items() if enabled]
         days_str = ','.join(enabled_days)
+        
+        print('Days string:', days_str)
         
         # Write to file
         with open(SCHEDULE_FILE, "w") as f:
             f.write("times={}\n".format(times_str))
             f.write("days={}\n".format(days_str))
+        
+        print('Schedule written to file successfully')
         
         # Calculate next feed time
         import time
@@ -129,5 +137,8 @@ def write_schedule(schedule_data):
             next_feed_service.write_next_feed("Not scheduled")
         
         return True
-    except:
+    except Exception as e:
+        print('Error in write_schedule:', e)
+        import sys
+        sys.print_exception(e)
         return False

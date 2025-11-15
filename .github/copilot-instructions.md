@@ -114,37 +114,79 @@ Backend (`api.py`) actual endpoints:
 
 ## Development Workflows
 
-### Local Testing (Without Hardware)
-```powershell
-# Activate venv first
+### IMPORTANT: Virtual Environment
+**ALWAYS activate the virtual environment before running any commands:**
+```bash
+# Activate venv (Linux/Raspberry Pi)
+source venv/bin/activate
+
+# Or on Windows PowerShell
 .\venv\Scripts\Activate.ps1
+```
+
+### Local Testing (Without Hardware)
+```bash
+# Activate venv first
+source venv/bin/activate
 
 # Syntax validation
-micropython -m py_compile Code\backend\main.py
+micropython -m py_compile Code/backend/main.py
 
 # Simulation test (no hardware required)
-micropython Tests\test_simulation.py
+micropython Tests/test_simulation.py
 ```
 
 ### Hardware Testing
-```powershell
+```bash
+# Activate venv first
+source venv/bin/activate
+
 # Test individual components
-micropython Tests\test_motor.py    # Motor control verification
-micropython Tests\test_rtc.py      # RTC communication test
+micropython Tests/test_motor.py    # Motor control verification
+micropython Tests/test_rtc.py      # RTC communication test
 ```
 
-### Deployment to ESP8266
-```powershell
-# Upload files using ampy
-ampy --port COM3 put Code\backend\main.py
-ampy --port COM3 put Code\backend\config.py
-ampy --port COM3 mkdir lib
-ampy --port COM3 put Code\backend\lib\stepper.py lib\stepper.py
-ampy --port COM3 put Code\backend\lib\rtc_handler.py lib\rtc_handler.py
-ampy --port COM3 put Code\backend\lib\notification.py lib\notification.py
+### Build Process (Compile Only - DO NOT Upload)
+**After making changes, ALWAYS build/compile but DO NOT automatically upload to ESP8266/ESP32:**
+
+```bash
+# Activate venv first
+source venv/bin/activate
+
+# Build the distribution files
+cd Code/backend
+./build_backend.sh api   # For API mode
+# OR
+./build_backend.sh battery   # For battery mode
+
+# This compiles and prepares files in dist/ folder
+# DO NOT run upload commands automatically
 ```
 
-**Windows port detection**: Use Device Manager → Ports to find COM port number.
+**Manual Upload Instructions** (only when user explicitly requests deployment):
+```bash
+# Example upload commands (DO NOT RUN AUTOMATICALLY)
+cd Code/backend/dist
+ampy -p /dev/ttyUSB0 -b 115200 put api.py
+# ... etc
+```
+
+### Deployment to ESP8266/ESP32
+**CRITICAL**: After code changes:
+1. ✅ Run build script to compile and prepare files
+2. ❌ DO NOT automatically upload to device
+3. ✅ Show user what files are ready in `dist/` folder
+4. ✅ Wait for user to explicitly request upload/deployment
+
+```bash
+# User must explicitly run deployment
+cd Code/backend
+./deploy_to_esp8266.sh /dev/ttyUSB0  # Only when user asks
+```
+
+**Port detection**:
+- Linux/Raspberry Pi: Check `/dev/ttyUSB*` or `/dev/ttyACM*`
+- Windows: Use Device Manager → Ports to find COM port number
 
 ### Wokwi Simulation
 Online circuit simulation at https://wokwi.com
@@ -217,12 +259,18 @@ Backend API endpoints expected at `/api/*`:
 
 ### Raspberry Pi / Linux
 ```bash
+# ALWAYS activate venv first
+source venv/bin/activate
+
 cd /home/pi/Desktop/Feeder/Code/backend
 python3 api.py
 ```
 
 ### Windows (PowerShell)
 ```powershell
+# ALWAYS activate venv first
+.\venv\Scripts\Activate.ps1
+
 cd Code\backend
 micropython api.py
 ```
@@ -232,11 +280,14 @@ Server always runs on port 5000. Frontend must use `http://localhost:5000` for a
 ## Testing Strategy
 
 **Always test in this order**:
-1. Syntax check: `micropython -m py_compile <file>`
-2. Simulation: `micropython Tests\test_simulation.py`
-3. Component tests: `test_motor.py`, `test_rtc.py`
-4. Wokwi simulation (if modifying hardware interactions)
-5. ESP8266 deployment
+1. **Activate venv**: `source venv/bin/activate`
+2. Syntax check: `micropython -m py_compile <file>`
+3. Build: `./build_backend.sh api` (compiles to `dist/` folder)
+4. Simulation: `micropython Tests/test_simulation.py`
+5. Component tests: `test_motor.py`, `test_rtc.py`
+6. Wokwi simulation (if modifying hardware interactions)
+7. **STOP HERE** - Wait for user to explicitly request deployment
+8. ESP8266/ESP32 deployment (only when user asks)
 
 ## Important Constraints
 
