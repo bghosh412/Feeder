@@ -16,10 +16,20 @@ MOTOR_STEPS_PER_FEEDING = 512  # Full rotation for 28BYJ-48
 MOTOR_SPEED_MS = 2  # Delay between steps in milliseconds
 
 # Motor pins (GPIO numbers connected to ULN2003)
-MOTOR_PIN_1 = 12  # D6
-MOTOR_PIN_2 = 13  # D7
-MOTOR_PIN_3 = 14  # D5
-MOTOR_PIN_4 = 15  # D8
+# For ESP32: Actual wiring: IN1=D21, IN2=D18, IN3=D5, IN4=TX2
+MOTOR_PIN_1 = 19  # D19 → IN1 (ESP32)
+MOTOR_PIN_2 = 18  # D18 → IN2 (ESP32)
+MOTOR_PIN_3 = 5   # D5 → IN3 (ESP32)
+MOTOR_PIN_4 = 17  # TX2 → IN4 (ESP32)
+
+# For ESP8266 (uncomment if using ESP8266):
+# MOTOR_PIN_1 = 12  # D6
+# MOTOR_PIN_2 = 13  # D7
+# MOTOR_PIN_3 = 14  # D5
+# MOTOR_PIN_4 = 15  # D8
+
+# Servo Configuration (for continuous rotation servo)
+SERVO_PIN = 18  # GPIO18 (D18) - Servo signal pin
 
 # RTC Configuration (I2C)
 RTC_SDA_PIN = 4   # D2

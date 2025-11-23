@@ -76,6 +76,16 @@ Code/backend/
 - API calls to backend endpoints
 - Status polling every 30 seconds for connection monitoring
 
+**CRITICAL - Frontend Development Workflow**:
+- **ALL frontend changes MUST be made in `Code/frontend/` folder ONLY**
+- Never edit files directly in `Code/backend/UI/` - they are auto-generated and will be overwritten
+- The build process (`build_backend.sh`) automatically:
+  1. Builds frontend from `Code/frontend/` → `Code/frontend/dist/`
+  2. Copies `Code/frontend/dist/` → `Code/backend/UI/`
+  3. Copies `Code/backend/UI/` → `Code/backend/dist/UI/`
+- Any manual changes to `Code/backend/UI/` will be lost on next build
+- To update HTML/CSS/JS: Edit in `Code/frontend/`, run `npm run build`, then `build_backend.sh`
+
 **API Integration Pattern**:
 Frontend (`app.js`) expects these endpoints:
 - `POST /api/feed` → manual feeding trigger

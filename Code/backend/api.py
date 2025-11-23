@@ -184,6 +184,209 @@ def handle_request(conn, request):
                 else:
                     print('Failed to write schedule')
                     send_response(conn, '500 Internal Server Error', 'application/json', json_encode({'error': 'Failed to save schedule'}))
+        
+        elif path == '/api/calibration/get':
+            if method == 'GET':
+                try:
+                    import calibration_service
+                    data = calibration_service.read_calibration()
+                    send_response(conn, '200 OK', 'application/json', json_encode(data))
+                except Exception as e:
+                    print('Error reading calibration:', e)
+                    send_response(conn, '500 Internal Server Error', 'application/json', json_encode({'error': str(e)}))
+            else:
+                send_response(conn, '405 Method Not Allowed', 'application/json', json_encode({'error': 'Only GET allowed'}))
+        
+        elif path == '/api/calibration/set':
+            if method == 'POST':
+                try:
+                    import calibration_service
+                    # body_data should contain one of: min_duty, max_duty, stop_duty
+                    updated = False
+                    for param in ['min_duty', 'max_duty', 'stop_duty']:
+                        if param in body_data:
+                            success = calibration_service.update_calibration(param, body_data[param])
+                            if success:
+                                updated = True
+                            else:
+                                send_response(conn, '500 Internal Server Error', 'application/json', json_encode({'error': 'Failed to update'}))
+                                return
+                    if updated:
+                        send_response(conn, '200 OK', 'application/json', json_encode({'status': 'ok'}))
+                    else:
+                        send_response(conn, '400 Bad Request', 'application/json', json_encode({'error': 'No valid parameter provided'}))
+                except Exception as e:
+                    print('Error updating calibration:', e)
+                    send_response(conn, '500 Internal Server Error', 'application/json', json_encode({'error': str(e)}))
+            else:
+                send_response(conn, '405 Method Not Allowed', 'application/json', json_encode({'error': 'Only POST allowed'}))
+        
+        elif path == '/api/calibration/move':
+            if method == 'POST':
+                try:
+                    import calibration_service
+                    import config
+                    
+                    duty = body_data.get('duty', 128)
+                    
+                    # Check if running on actual hardware
+                    try:
+                        from machine import Pin
+                        on_hardware = True
+                    except ImportError:
+                        on_hardware = False
+                        print('Warning: Not running on ESP hardware, move disabled')
+                    
+                    if on_hardware:
+                        success = calibration_service.move_servo_to_duty(config.SERVO_PIN, duty)
+                        if success:
+                            send_response(conn, '200 OK', 'application/json', json_encode({'status': 'ok', 'duty': duty}))
+                        else:
+                            send_response(conn, '500 Internal Server Error', 'application/json', json_encode({'error': 'Move failed'}))
+                    else:
+                        # Simulation mode
+                        print('Simulation: Would move servo to duty={}'.format(duty))
+                        send_response(conn, '200 OK', 'application/json', json_encode({'status': 'ok', 'duty': duty, 'message': 'Simulation mode'}))
+                except Exception as e:
+                    print('Error moving servo:', e)
+                    send_response(conn, '500 Internal Server Error', 'application/json', json_encode({'error': str(e)}))
+            else:
+                send_response(conn, '405 Method Not Allowed', 'application/json', json_encode({'error': 'Only POST allowed'}))
+        
+        elif path == '/api/calibration/stop':
+            if method == 'POST':
+                try:
+                    import calibration_service
+                    import config
+                    
+                    # Check if running on actual hardware
+                    try:
+                        from machine import Pin
+                        on_hardware = True
+                    except ImportError:
+                        on_hardware = False
+                        print('Warning: Not running on ESP hardware, stop disabled')
+                    
+                    if on_hardware:
+                        success = calibration_service.stop_servo(config.SERVO_PIN)
+                        if success:
+                            send_response(conn, '200 OK', 'application/json', json_encode({'status': 'ok', 'message': 'Motor stopped'}))
+                        else:
+                            send_response(conn, '500 Internal Server Error', 'application/json', json_encode({'error': 'Stop failed'}))
+                    else:
+                        # Simulation mode
+                        print('Simulation: Would stop servo')
+                        send_response(conn, '200 OK', 'application/json', json_encode({'status': 'ok', 'message': 'Simulation mode'}))
+                except Exception as e:
+                    print('Error stopping servo:', e)
+                    send_response(conn, '500 Internal Server Error', 'application/json', json_encode({'error': str(e)}))
+            else:
+                send_response(conn, '405 Method Not Allowed', 'application/json', json_encode({'error': 'Only POST allowed'}))
+        
+        elif path == '/api/calibration/test':
+            if method == 'POST':
+                try:
+                    import calibration_service
+                    import config
+                    
+                    # Check if running on actual hardware
+                    try:
+                        from machine import Pin
+                        on_hardware = True
+                    except ImportError:
+                        on_hardware = False
+                        print('Warning: Not running on ESP hardware, test disabled')
+                    
+                    if on_hardware:
+                        test_type = body_data.get('test_type', 'duty')
+                        if test_type == 'duty':
+                            duty_type = body_data.get('duty_type', 'stop')
+                            success = calibration_service.test_servo(config.SERVO_PIN, 'duty', duty_type=duty_type)
+                        elif test_type == 'speed':
+                            speed = body_data.get('speed', 0)
+                            success = calibration_service.test_servo(config.SERVO_PIN, 'speed', speed=speed)
+                        else:
+                            send_response(conn, '400 Bad Request', 'application/json', json_encode({'error': 'Invalid test_type'}))
+                            return
+                        
+                        if success:
+                            send_response(conn, '200 OK', 'application/json', json_encode({'status': 'ok'}))
+                        else:
+                            send_response(conn, '500 Internal Server Error', 'application/json', json_encode({'error': 'Test failed'}))
+                    else:
+                        # Simulation mode
+                        test_type = body_data.get('test_type', 'duty')
+                        print('Simulation: Would test servo with type={}'.format(test_type))
+                        send_response(conn, '200 OK', 'application/json', json_encode({'status': 'ok', 'message': 'Simulation mode'}))
+                except Exception as e:
+                    print('Error testing servo:', e)
+                    send_response(conn, '500 Internal Server Error', 'application/json', json_encode({'error': str(e)}))
+            else:
+                send_response(conn, '405 Method Not Allowed', 'application/json', json_encode({'error': 'Only POST allowed'}))
+        
+        elif path == '/api/calibrate/left' or path == '/api/calibrate/right':
+            if method == 'POST':
+                try:
+                    # Check if running on actual hardware (ESP8266/ESP32)
+                    try:
+                        from machine import Pin
+                        on_hardware = True
+                    except ImportError:
+                        on_hardware = False
+                        print('Warning: Not running on ESP hardware, motor control disabled')
+                    
+                    if on_hardware:
+                        import config
+                        from lib.stepper import StepperMotor
+                        
+                        # Get speed from request
+                        speed = body_data.get('speed', 'medium')
+                        
+                        # Map speed to delay_ms (lower delay = faster)
+                        speed_map = {
+                            'very_slow': 10,
+                            'slow': 5,
+                            'medium': 2,
+                            'fast': 1,
+                            'very_fast': 0
+                        }
+                        delay_ms = speed_map.get(speed, 2)
+                        
+                        # Initialize motor
+                        motor = StepperMotor(
+                            config.MOTOR_PIN_1,
+                            config.MOTOR_PIN_2,
+                            config.MOTOR_PIN_3,
+                            config.MOTOR_PIN_4
+                        )
+                        
+                        # Determine direction and steps
+                        # 512 steps = 1/8 rotation (about 45 degrees)
+                        steps = 512
+                        if path == '/api/calibrate/left':
+                            steps = -steps  # Negative for counter-clockwise
+                        
+                        print('Calibrating motor: {} steps at {} ms delay'.format(steps, delay_ms))
+                        motor.step(steps, delay_ms)
+                        motor.off()  # Turn off motor to save power
+                        
+                        direction = 'left' if path == '/api/calibrate/left' else 'right'
+                        result = json_encode({'status': 'ok', 'message': 'Motor moved {}'.format(direction)})
+                    else:
+                        # Simulation mode - just return success without moving motor
+                        direction = 'left' if path == '/api/calibrate/left' else 'right'
+                        speed = body_data.get('speed', 'medium')
+                        print('Simulation: Would move motor {} at {} speed'.format(direction, speed))
+                        result = json_encode({'status': 'ok', 'message': 'Motor moved {} (simulation mode)'.format(direction)})
+                    
+                    send_response(conn, '200 OK', 'application/json', result)
+                    
+                except Exception as e:
+                    print('Error in calibration:', e)
+                    error_msg = 'Calibration error: {}'.format(str(e))
+                    send_response(conn, '500 Internal Server Error', 'application/json', json_encode({'status': 'error', 'message': error_msg}))
+            else:
+                send_response(conn, '405 Method Not Allowed', 'application/json', json_encode({'error': 'Only POST allowed'}))
                 
         elif path == '/api/lastfed':
             if method == 'GET':

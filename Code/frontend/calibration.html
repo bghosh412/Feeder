@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Calibration - Fish Feeder</title>
+    <link rel="stylesheet" href="css/styles.css">
+    <style>
+        .calibration-card { background: #fff; border: 2px solid #176d87; border-radius: 4px; margin: 24px 0; padding: 24px; }
+        .calibration-header { font-size: 1.3em; font-weight: bold; color: #176d87; margin-bottom: 16px; }
+        .calibration-controls { display: flex; align-items: center; gap: 24px; margin-bottom: 16px; }
+        .calibration-label { font-weight: bold; margin-right: 8px; }
+        .calibration-dropdown { padding: 4px 8px; font-size: 1em; }
+        .calibration-btn { background: #176d87; color: #fff; border: none; border-radius: 2px; padding: 8px 32px; font-size: 1em; margin: 8px; cursor: pointer; }
+        .calibration-btn:active { background: #124e63; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="header-content">
+            <div class="header-logo"><img src="assets/images/Header.png" alt="Fish Feeder Logo"></div>
+            <div class="header-title"><h1>Keep your Fish full</h1></div>
+        </div>
+    </div>
+    <div style="display:flex">
+        <div class="sidebar">
+            <b>Quick Links</b><br>
+            <a href="index.html" class="quick-link">Home</a> <a href="setschedule.html" class="quick-link">Set Feeding Schedule</a> <a href="feednow.html" class="quick-link">Feed Now !!!</a> <a href="setquantity.html" class="quick-link">Set Quantity</a> <a href="calibration.html" class="quick-link">Calibration</a> <a href="motor_setup.html" class="quick-link">Motor Setup</a>
+        </div>
+        <div style="flex:1;padding:8px">
+            <div class="calibration-card">
+                <div class="calibration-header">&#128295; Adjust Orientation</div>
+                <div class="calibration-controls">
+                    <span class="calibration-label">Speed :</span>
+                    <select id="calibrationSpeed" class="calibration-dropdown">
+                        <option value="very_slow">Very Slow</option>
+                        <option value="slow">Slow</option>
+                        <option value="medium" selected>Medium</option>
+                        <option value="fast">Fast</option>
+                        <option value="very_fast">Very Fast</option>
+                    </select>
+                </div>
+                <div>
+                    <button class="calibration-btn" id="calibLeftBtn">&lt;&lt;</button>
+                    <button class="calibration-btn" id="calibRightBtn">&gt;&gt;</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const leftBtn = document.getElementById('calibLeftBtn');
+            const rightBtn = document.getElementById('calibRightBtn');
+            const speedSelect = document.getElementById('calibrationSpeed');
+
+            leftBtn.addEventListener('click', function() {
+                const speed = speedSelect.value;
+                leftBtn.disabled = true;
+                leftBtn.textContent = 'Moving...';
+                
+                fetch('/api/calibrate/left', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ speed: speed })
+                })
+                .then(r => r.json())
+                .then(data => {
+                    if (data.status === 'ok') {
+                        console.log('Motor moved left');
+                    } else {
+                        alert('Error: ' + (data.message || 'Failed to move motor'));
+                    }
+                })
+                .catch(err => {
+                    console.error('Error:', err);
+                    alert('Error moving motor left');
+                })
+                .finally(() => {
+                    leftBtn.disabled = false;
+                    leftBtn.textContent = '<<';
+                });
+            });
+
+            rightBtn.addEventListener('click', function() {
+                const speed = speedSelect.value;
+                rightBtn.disabled = true;
+                rightBtn.textContent = 'Moving...';
+                
+                fetch('/api/calibrate/right', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ speed: speed })
+                })
+                .then(r => r.json())
+                .then(data => {
+                    if (data.status === 'ok') {
+                        console.log('Motor moved right');
+                    } else {
+                        alert('Error: ' + (data.message || 'Failed to move motor'));
+                    }
+                })
+                .catch(err => {
+                    console.error('Error:', err);
+                    alert('Error moving motor right');
+                })
+                .finally(() => {
+                    rightBtn.disabled = false;
+                    rightBtn.textContent = '>>';
+                });
+            });
+        });
+    </script>
+</body>
+</html>
