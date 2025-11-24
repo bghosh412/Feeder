@@ -1,122 +1,132 @@
 # Servo calibration service for continuous rotation servo
-# Manages min_duty, max_duty, stop_duty values and testing
+# Manages duty cycle and pulse duration for food dispensing
 
-import json
 from machine import Pin, PWM
 import time
 
 # Data file path
-CALIBRATION_FILE = 'data/calibration.json'
+CALIBRATION_FILE = 'data/calibration.txt'
+SERVO_PIN = 18  # GPIO pin for servo
 
 # Default calibration values
-DEFAULT_VALUES = {
-    'min_duty': 26,   # Full reverse
-    'max_duty': 230,  # Full forward
-    'stop_duty': 128  # Stop position
-}
+DEFAULT_DUTY_CYCLE = 80
+DEFAULT_PULSE_DURATION = 10  # milliseconds
 
 def read_calibration():
-    """Read calibration values from file, return defaults if not found."""
+    """Read duty cycle and pulse duration from file.
+    Returns: tuple (duty_cycle, pulse_duration_ms)
+    """
     try:
         with open(CALIBRATION_FILE, 'r') as f:
-            data = json.load(f)
-            return data
+            data = f.read().strip()
+            parts = data.split(',')
+            duty_cycle = int(parts[0])
+            pulse_duration = int(parts[1])
+            return duty_cycle, pulse_duration
     except:
-        return DEFAULT_VALUES.copy()
+        # Return defaults if file doesn't exist or is corrupt
+        return DEFAULT_DUTY_CYCLE, DEFAULT_PULSE_DURATION
 
-def write_calibration(data):
-    """Write calibration values to file."""
+def save_calibration(duty_cycle, pulse_duration):
+    """Save duty cycle and pulse duration to file.
+    Args:
+        duty_cycle: PWM duty cycle value
+        pulse_duration: pulse duration in milliseconds
+    """
     try:
         with open(CALIBRATION_FILE, 'w') as f:
-            json.dump(data, f)
+            f.write(f"{duty_cycle},{pulse_duration}")
         return True
     except Exception as e:
-        print(f"Error writing calibration: {e}")
+        print(f"Error saving calibration: {e}")
         return False
 
-def update_calibration(param, value):
-    """Update a specific calibration parameter."""
-    data = read_calibration()
-    if param in ['min_duty', 'max_duty', 'stop_duty']:
-        data[param] = int(value)
-        return write_calibration(data)
-    return False
+def adjust_duty_cycle(increment):
+    """Adjust duty cycle by increment value.
+    Args:
+        increment: positive to increase, negative to decrease
+    Returns: tuple (new_duty_cycle, pulse_duration)
+    """
+    duty_cycle, pulse_duration = read_calibration()
+    duty_cycle += increment
+    # Clamp duty cycle to reasonable range (0-1023 for ESP32)
+    duty_cycle = max(0, min(1023, duty_cycle))
+    save_calibration(duty_cycle, pulse_duration)
+    return duty_cycle, pulse_duration
 
-def move_servo_to_duty(servo_pin, duty):
+def adjust_pulse_duration(increment):
+    """Adjust pulse duration by increment value (in milliseconds).
+    Args:
+        increment: positive to increase, negative to decrease
+    Returns: tuple (duty_cycle, new_pulse_duration)
     """
-    Move servo to specific duty value.
-    This is used during calibration to test different duty values.
-    """
-    try:
-        servo = PWM(Pin(servo_pin), freq=50)
-        duty = int(duty)
-        servo.duty(duty)
-        print(f"Moved servo to duty: {duty}")
-        time.sleep(0.5)  # Brief hold
-        # Keep servo active (don't deinit) so user can observe position
-        return True
-    except Exception as e:
-        print(f"Error moving servo: {e}")
-        return False
+    duty_cycle, pulse_duration = read_calibration()
+    pulse_duration += increment
+    # Clamp pulse duration to reasonable range (1-1000ms)
+    pulse_duration = max(1, min(1000, pulse_duration))
+    save_calibration(duty_cycle, pulse_duration)
+    return duty_cycle, pulse_duration
 
-def stop_servo(servo_pin):
+def get_current_calibration():
+    """Get current calibration values as a dictionary."""
+    duty_cycle, pulse_duration = read_calibration()
+    return {
+        'duty_cycle': duty_cycle,
+        'pulse_duration': pulse_duration
+    }
+
+def disburseFood():
+    """Disburse food using calibrated servo settings.
+    Reads duty cycle and pulse duration from file, runs servo, then deinits.
     """
-    Stop and deinitialize the servo motor.
-    This removes power from the servo.
-    """
+    duty_cycle, pulse_duration = read_calibration()
+    
     try:
-        servo = PWM(Pin(servo_pin), freq=50)
+        # Initialize servo PWM
+        servo = PWM(Pin(SERVO_PIN), freq=50)
+        
+        # Apply duty cycle for specified duration
+        servo.duty(duty_cycle)
+        print(f"Dispensing food: duty={duty_cycle}, duration={pulse_duration}ms")
+        time.sleep_ms(pulse_duration)
+        
+        # Deinitialize to stop motor
         servo.deinit()
-        print("Servo stopped and deinitialized")
+        print("Food dispensed, servo deinitialized")
         return True
+        
     except Exception as e:
-        print(f"Error stopping servo: {e}")
+        print(f"Error dispensing food: {e}")
         return False
 
-def test_servo(servo_pin, test_type, **kwargs):
+def test_calibration():
+    """Test current calibration by running servo with current settings.
+    Returns current calibration values after test.
     """
-    Test servo with specified parameters.
-    test_type: 'duty' or 'speed'
-    For 'duty': duty_type = 'min', 'max', or 'stop'
-    For 'speed': speed = -100 to 100
-    """
+    duty_cycle, pulse_duration = read_calibration()
+    
     try:
-        calibration = read_calibration()
-        servo = PWM(Pin(servo_pin), freq=50)
+        # Initialize servo PWM
+        servo = PWM(Pin(SERVO_PIN), freq=50)
         
-        if test_type == 'duty':
-            duty_type = kwargs.get('duty_type', 'stop')
-            if duty_type == 'min':
-                duty = calibration['min_duty']
-            elif duty_type == 'max':
-                duty = calibration['max_duty']
-            else:  # stop
-                duty = calibration['stop_duty']
-            servo.duty(duty)
-            print(f"Testing {duty_type} duty: {duty}")
-            time.sleep(1.5)
+        # Apply duty cycle for specified duration
+        servo.duty(duty_cycle)
+        print(f"Testing: duty={duty_cycle}, duration={pulse_duration}ms")
+        time.sleep_ms(pulse_duration)
         
-        elif test_type == 'speed':
-            speed = kwargs.get('speed', 0)
-            speed = max(-100, min(100, speed))  # Clamp to -100..100
-            
-            min_duty = calibration['min_duty']
-            max_duty = calibration['max_duty']
-            stop_duty = calibration['stop_duty']
-            
-            if speed == 0:
-                duty = stop_duty
-            elif speed > 0:
-                duty = int(stop_duty + (max_duty - stop_duty) * speed / 100)
-            else:
-                duty = int(stop_duty + (min_duty - stop_duty) * (-speed) / 100)
-            
-            servo.duty(duty)
-            print(f"Testing speed {speed}: duty={duty}")
-            time.sleep(1.5)
-        
+        # Deinitialize to stop motor
         servo.deinit()
-        return True
+        print("Test complete, servo deinitialized")
+        
+        return {
+            'success': True,
+            'duty_cycle': duty_cycle,
+            'pulse_duration': pulse_duration
+        }
+        
     except Exception as e:
-        print(f"Error testing servo: {e}")
-        return False
+        print(f"Error testing calibration: {e}")
+        return {
+            'success': False,
+            'error': str(e)
+        }

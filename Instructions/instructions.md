@@ -25,10 +25,11 @@ This is an automatic fish feeder project deployed to ESP8266, powered by 4 Alkal
 - Set feeding schedule (time)
 - Set feed quantity
 - View feed remaining, last fed time, battery status, and system info
+- **Calibrate feeder** - Fine-tune servo motor duty cycle and pulse duration
 - Quick links for navigation
 
 #### Technology
-- Pure HTML and CSS (no frameworks, no JavaScript required for basic operation)
+- Pure HTML and CSS with minimal JavaScript for calibration
 - Minimal CSS for layout and readability
 - No build tools, no dependencies
 - Can be served as static files from ESP8266 SPIFFS or LittleFS
@@ -36,12 +37,18 @@ This is an automatic fish feeder project deployed to ESP8266, powered by 4 Alkal
 #### File Structure
 ```
 Code/frontend/
-├── index.html         # Main web page
+├── index.html           # Main web page
+├── feednow.html        # Feed now page
+├── setschedule.html    # Schedule configuration
+├── setquantity.html    # Quantity settings
+├── calibration.html    # Servo calibration page
 ├── css/
-│   └── styles.css     # Minimal stylesheet
+│   └── styles.css      # Minimal stylesheet
+├── js/
+│   └── calibration.js  # Calibration page logic
 ├── assets/
 │   └── images/
-│       └── Header.png # Header logo
+│       └── Header.png  # Header logo
 ```
 
 #### Usage
@@ -86,21 +93,43 @@ Code/frontend/
 #### Backend File Structure
 ```
 /Code/backend/
-├── main.py                 # Main entry point with feeding logic
-├── config.py              # Configuration settings (WiFi, schedule, pins)
-├── lib/                   # Hardware driver modules
-│   ├── stepper.py        # 28BYJ-48 stepper motor driver
-│   ├── rtc_handler.py    # DS3231 RTC interface
-│   └── notification.py   # ntfy.sh notification service
-├── wokwi/                # Wokwi online simulator configuration
-│   ├── diagram.json      # Circuit diagram
-│   └── wokwi.toml        # Simulator settings
-└── README.md             # Testing and deployment guide
+├── main.py                    # Main entry point with feeding logic
+├── api.py                     # API server for web interface (always-on mode)
+├── config.py                  # Configuration settings (WiFi, schedule, pins)
+├── services.py                # Schedule data operations
+├── last_fed_service.py        # Last feed timestamp tracking
+├── next_feed_service.py       # Next scheduled feed calculation
+├── quantity_service.py        # Feed quantity/remaining tracking
+├── calibration_service.py     # Servo calibration and disburseFood()
+├── urequests.py              # HTTP client library (MicroPython)
+├── data/                     # JSON persistence layer (API mode only)
+│   ├── schedule.txt          # Feeding schedule with times/days
+│   ├── last_fed.txt          # Last feeding timestamp
+│   ├── next_feed.txt         # Calculated next feed time
+│   ├── quantity.txt          # Remaining feed quantity
+│   └── calibration.txt       # Servo duty cycle and pulse duration
+├── UI/                       # Static files served by api.py
+│   ├── index.html
+│   ├── feednow.html
+│   ├── setquantity.html
+│   ├── setschedule.html
+│   ├── calibration.html
+│   ├── css/styles.css
+│   └── js/calibration.js
+├── lib/                      # Hardware driver modules
+│   ├── stepper.py           # 28BYJ-48 stepper motor driver
+│   ├── rtc_handler.py       # DS3231 RTC interface
+│   └── notification.py      # ntfy.sh notification service
+├── wokwi/                   # Wokwi online simulator configuration
+│   ├── diagram.json         # Circuit diagram
+│   └── wokwi.toml           # Simulator settings
+└── README.md                # Testing and deployment guide
 
 /Tests/
-├── test_motor.py         # Standalone motor testing
-├── test_rtc.py           # Standalone RTC testing
-└── test_simulation.py    # Simple simulation without hardware
+├── test_motor.py            # Standalone motor testing
+├── test_rtc.py              # Standalone RTC testing
+├── test_servo.py            # Servo calibration test script
+└── test_simulation.py       # Simple simulation without hardware
 ```
 
 #### Key Backend Components
@@ -137,6 +166,15 @@ Code/frontend/
 - Success and error notification methods
 - Configurable priority levels
 
+**calibration_service.py** - Servo calibration:
+- `read_calibration()` - Read duty cycle and pulse duration from file
+- `save_calibration(duty_cycle, pulse_duration)` - Save calibration settings
+- `adjust_duty_cycle(increment)` - Adjust duty cycle by ±1 or ±10
+- `adjust_pulse_duration(increment)` - Adjust pulse duration by ±5ms
+- `disburseFood()` - Main feeding method: reads calibration, runs servo, deinits
+- `test_calibration()` - Test current settings and return feedback
+- Calibration stored in `data/calibration.txt` as `duty_cycle,pulse_duration`
+
 ## Development Guidelines
 
 ### Power Optimization
@@ -147,7 +185,12 @@ Code/frontend/
 - **Debug Output**: Disabled in production (`esp.osdebug(None)`)
 
 ### GPIO Pin Configuration
-**Stepper Motor (ULN2003):**
+**Continuous Rotation Servo:**
+- Signal → GPIO18 (D18 on ESP32)
+- Power: 5V (not 3.3V!)
+- PWM frequency: 50Hz
+
+**Stepper Motor (ULN2003) - Legacy/Alternative:**
 - IN1 → GPIO12 (D6)
 - IN2 → GPIO13 (D7)
 - IN3 → GPIO14 (D5)
@@ -163,6 +206,32 @@ Code/frontend/
 - All hardware drivers are in lib/ folder for clean organization
 - Frontend should be lightweight and static-deployable
 
+### API Endpoints (api.py)
+The backend provides the following REST API endpoints:
+
+**Feeding:**
+- `POST /api/feednow` - Trigger manual feeding, update quantity and last_fed
+- `GET /api/home` - Get system status (connection, quantity, last_fed, next_feed, battery)
+
+**Schedule:**
+- `GET /api/schedule` - Get feeding schedule
+- `POST /api/schedule` - Save feeding schedule (calculates next_feed automatically)
+
+**Quantity:**
+- `GET /api/quantity` - Get remaining feed quantity
+- `POST /api/quantity` - Update feed quantity
+
+**Calibration:**
+- `GET /api/calibration/get` - Get current duty cycle and pulse duration
+- `POST /api/calibration/save` - Save calibration (body: `{duty_cycle, pulse_duration}`)
+- `POST /api/calibration/adjust_duty` - Adjust duty cycle (body: `{increment}`)
+- `POST /api/calibration/adjust_duration` - Adjust pulse duration (body: `{increment}`)
+- `POST /api/calibration/test` - Test current calibration settings
+
+**Health:**
+- `GET /api/ping` - Health check endpoint
+- `GET /api/status` - Server status
+
 ### Notifications
 - Use ntfy service for push notifications to phone
 - Send notification after each successful feeding
@@ -170,6 +239,65 @@ Code/frontend/
 - Error notifications sent if feeding fails
 - Configure topic in config.py: `NTFY_TOPIC = "your_fish_feeder_topic"`
 - Subscribe to topic on phone: https://ntfy.sh/your_fish_feeder_topic
+
+## Servo Calibration Workflow
+
+### Purpose
+The calibration system allows fine-tuning of the servo motor to dispense the exact amount of food needed.
+
+### Calibration Parameters
+- **Duty Cycle** (0-1023): PWM duty cycle for servo rotation speed/direction
+- **Pulse Duration** (1-1000ms): How long to run the servo motor
+
+### Calibration Page Controls
+| Button | Action |
+|--------|--------|
+| `>>` (duty) | Decrease duty cycle by 10 (more food) |
+| `>` (duty) | Decrease duty cycle by 1 |
+| `<` (duty) | Increase duty cycle by 1 (less food) |
+| `<<` (duty) | Increase duty cycle by 10 |
+| `>` (duration) | Increase pulse duration by 5ms |
+| `<` (duration) | Decrease pulse duration by 5ms |
+| Test | Run servo with current settings |
+| Save | Save calibration to file |
+
+### Calibration Steps
+1. Open `http://<device-ip>/calibration.html` in browser
+2. Current values displayed: Duty Cycle (default: 80), Pulse Duration (default: 10ms)
+3. Press **Test** button to observe current behavior
+4. **If disk doesn't disperse complete food**: Press `<` or `<<` buttons (increases duty)
+5. **If disk disperses too much food**: Press `>` or `>>` buttons (decreases duty)
+6. Adjust pulse duration with `<` or `>` buttons if needed
+7. Press **Test** repeatedly to verify calibration
+8. Once satisfied, press **Save** to persist settings
+9. Settings stored in `data/calibration.txt` (format: `duty_cycle,pulse_duration`)
+
+### Using Calibration in Code
+The `disburseFood()` function automatically uses the saved calibration:
+```python
+import calibration_service
+
+# Dispense food using saved calibration
+calibration_service.disburseFood()
+# This will:
+# 1. Read duty_cycle and pulse_duration from data/calibration.txt
+# 2. Initialize servo PWM
+# 3. Apply duty cycle for specified duration
+# 4. Deinitialize servo (stops motor and saves power)
+```
+
+### Test Script for Manual Calibration
+Use `test_servo.py` for hardware testing:
+```bash
+# Activate virtual environment
+source venv/bin/activate
+
+# Run continuous microstepping test
+micropython Tests/test_servo.py
+# - Pulses duty 80 for 10ms
+# - Deinits servo between pulses
+# - Press Ctrl+C to stop
+```
 
 ## Testing & Development
 
@@ -183,6 +311,7 @@ micropython Tests/test_simulation.py
 
 # Check for syntax errors
 micropython -m py_compile Code/backend/main.py
+micropython -m py_compile Code/backend/calibration_service.py
 ```
 
 ### Wokwi Online Simulation

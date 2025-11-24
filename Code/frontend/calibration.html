@@ -2,16 +2,37 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Calibration - Fish Feeder</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Calibrate Feeder - Fish Feeder</title>
     <link rel="stylesheet" href="css/styles.css">
     <style>
         .calibration-card { background: #fff; border: 2px solid #176d87; border-radius: 4px; margin: 24px 0; padding: 24px; }
-        .calibration-header { font-size: 1.3em; font-weight: bold; color: #176d87; margin-bottom: 16px; }
-        .calibration-controls { display: flex; align-items: center; gap: 24px; margin-bottom: 16px; }
-        .calibration-label { font-weight: bold; margin-right: 8px; }
-        .calibration-dropdown { padding: 4px 8px; font-size: 1em; }
-        .calibration-btn { background: #176d87; color: #fff; border: none; border-radius: 2px; padding: 8px 32px; font-size: 1em; margin: 8px; cursor: pointer; }
-        .calibration-btn:active { background: #124e63; }
+        .calibration-header { font-size: 1.5em; font-weight: bold; color: #176d87; margin-bottom: 20px; }
+        .calibration-info { background: #e6f2f5; padding: 16px; border-radius: 4px; margin-bottom: 24px; line-height: 1.6; }
+        .calibration-info p { margin: 8px 0; }
+        .calibration-status { display: flex; gap: 32px; margin-bottom: 32px; flex-wrap: wrap; }
+        .status-item { display: flex; align-items: center; gap: 8px; font-size: 1.1em; }
+        .status-item .label { font-weight: bold; color: #176d87; }
+        .status-item .value { background: #176d87; color: white; padding: 4px 12px; border-radius: 4px; font-weight: bold; min-width: 60px; text-align: center; }
+        .calibration-controls { margin-bottom: 24px; }
+        .control-group { margin-bottom: 24px; }
+        .control-group label { display: block; font-weight: bold; color: #176d87; margin-bottom: 12px; font-size: 1.1em; }
+        .button-row { display: flex; gap: 12px; flex-wrap: wrap; }
+        .btn { border: none; border-radius: 4px; padding: 12px 24px; font-size: 1.1em; cursor: pointer; transition: all 0.2s; font-weight: bold; }
+        .btn-adjust { background: #176d87; color: white; min-width: 80px; }
+        .btn-adjust:hover { background: #124e63; }
+        .btn-adjust:active { transform: scale(0.95); }
+        .btn-adjust:disabled { background: #ccc; cursor: not-allowed; }
+        .btn-test { background: #28a745; color: white; min-width: 120px; }
+        .btn-test:hover { background: #218838; }
+        .btn-test:active { transform: scale(0.95); }
+        .btn-save { background: #007bff; color: white; min-width: 120px; }
+        .btn-save:hover { background: #0056b3; }
+        .btn-save:active { transform: scale(0.95); }
+        .action-buttons { display: flex; gap: 16px; margin-top: 32px; }
+        .message { margin-top: 24px; padding: 16px; border-radius: 4px; display: none; font-weight: bold; }
+        .message.success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; display: block; }
+        .message.error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; display: block; }
     </style>
 </head>
 <body>
@@ -24,90 +45,62 @@
     <div style="display:flex">
         <div class="sidebar">
             <b>Quick Links</b><br>
-            <a href="index.html" class="quick-link">Home</a> <a href="setschedule.html" class="quick-link">Set Feeding Schedule</a> <a href="feednow.html" class="quick-link">Feed Now !!!</a> <a href="setquantity.html" class="quick-link">Set Quantity</a> <a href="calibration.html" class="quick-link">Calibration</a> <a href="motor_setup.html" class="quick-link">Motor Setup</a>
+            <a href="index.html" class="quick-link">Home</a>
+            <a href="setschedule.html" class="quick-link">Set Feeding Schedule</a>
+            <a href="feednow.html" class="quick-link">Feed Now !!!</a>
+            <a href="setquantity.html" class="quick-link">Set Quantity</a>
+            <a href="calibration.html" class="quick-link active">Calibrate Feeder</a>
         </div>
-        <div style="flex:1;padding:8px">
+        <div style="flex:1;padding:16px">
             <div class="calibration-card">
-                <div class="calibration-header">&#128295; Adjust Orientation</div>
+                <div class="calibration-header">Calibrate Feeder</div>
+                
+                <div class="calibration-info">
+                    <p>Use this page to calibrate your feeder. If the disk is not disbursing complete food, then press "&lt;" button, otherwise press "&gt;" button. To calibrate faster, you can use the "&lt;&lt;" or "&gt;&gt;" buttons.</p>
+                    <p>After adjusting, press "Test" button few times to verify the calibration.</p>
+                    <p>Once calibration is completed, press "Save" button to save the calibration settings.</p>
+                </div>
+
+                <div class="calibration-status">
+                    <div class="status-item">
+                        <span class="label">Current Duty Cycle:</span>
+                        <span class="value" id="duty-cycle-value">80</span>
+                    </div>
+                    <div class="status-item">
+                        <span class="label">Current Pulse Duration:</span>
+                        <span class="value" id="pulse-duration-value">10</span> ms
+                    </div>
+                </div>
+
                 <div class="calibration-controls">
-                    <span class="calibration-label">Speed :</span>
-                    <select id="calibrationSpeed" class="calibration-dropdown">
-                        <option value="very_slow">Very Slow</option>
-                        <option value="slow">Slow</option>
-                        <option value="medium" selected>Medium</option>
-                        <option value="fast">Fast</option>
-                        <option value="very_fast">Very Fast</option>
-                    </select>
+                    <div class="control-group">
+                        <label>Adjust Duty Cycle:</label>
+                        <div class="button-row">
+                            <button class="btn btn-adjust" id="duty-decrease-large">&lt;&lt;</button>
+                            <button class="btn btn-adjust" id="duty-decrease">&lt;</button>
+                            <button class="btn btn-adjust" id="duty-increase">&gt;</button>
+                            <button class="btn btn-adjust" id="duty-increase-large">&gt;&gt;</button>
+                        </div>
+                    </div>
+
+                    <div class="control-group">
+                        <label>Adjust Pulse Duration:</label>
+                        <div class="button-row">
+                            <button class="btn btn-adjust" id="duration-decrease">&lt;</button>
+                            <button class="btn btn-adjust" id="duration-increase">&gt;</button>
+                        </div>
+                    </div>
+
+                    <div class="action-buttons">
+                        <button class="btn btn-test" id="test-btn">Test</button>
+                        <button class="btn btn-save" id="save-btn">Save</button>
+                    </div>
                 </div>
-                <div>
-                    <button class="calibration-btn" id="calibLeftBtn">&lt;&lt;</button>
-                    <button class="calibration-btn" id="calibRightBtn">&gt;&gt;</button>
-                </div>
+
+                <div class="message" id="message"></div>
             </div>
         </div>
     </div>
-    <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            const leftBtn = document.getElementById('calibLeftBtn');
-            const rightBtn = document.getElementById('calibRightBtn');
-            const speedSelect = document.getElementById('calibrationSpeed');
-
-            leftBtn.addEventListener('click', function() {
-                const speed = speedSelect.value;
-                leftBtn.disabled = true;
-                leftBtn.textContent = 'Moving...';
-                
-                fetch('/api/calibrate/left', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ speed: speed })
-                })
-                .then(r => r.json())
-                .then(data => {
-                    if (data.status === 'ok') {
-                        console.log('Motor moved left');
-                    } else {
-                        alert('Error: ' + (data.message || 'Failed to move motor'));
-                    }
-                })
-                .catch(err => {
-                    console.error('Error:', err);
-                    alert('Error moving motor left');
-                })
-                .finally(() => {
-                    leftBtn.disabled = false;
-                    leftBtn.textContent = '<<';
-                });
-            });
-
-            rightBtn.addEventListener('click', function() {
-                const speed = speedSelect.value;
-                rightBtn.disabled = true;
-                rightBtn.textContent = 'Moving...';
-                
-                fetch('/api/calibrate/right', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ speed: speed })
-                })
-                .then(r => r.json())
-                .then(data => {
-                    if (data.status === 'ok') {
-                        console.log('Motor moved right');
-                    } else {
-                        alert('Error: ' + (data.message || 'Failed to move motor'));
-                    }
-                })
-                .catch(err => {
-                    console.error('Error:', err);
-                    alert('Error moving motor right');
-                })
-                .finally(() => {
-                    rightBtn.disabled = false;
-                    rightBtn.textContent = '>>';
-                });
-            });
-        });
-    </script>
+    <script src="js/calibration.js"></script>
 </body>
 </html>

@@ -10,9 +10,9 @@ import time
 
 SERVO_PIN = 18  # Use GPIO18 (D18)
 STOP_DUTY = 75  # Stop/neutral position (initial)
-PULSE_DUTY = 71  # Movement duty cycle (104)
+PULSE_DUTY = 72  # Movement duty cycle (104)
 HOLD_DUTY = 73  # Hold position during sleep
-PULSE_DURATION_MS = 175  # Duration of each pulse in milliseconds
+PULSE_DURATION_MS = 160  # Duration of each pulse in milliseconds
 SLEEP_DURATION_S = 2  # Sleep between pulses in seconds
 
 def continuous_microstep():
