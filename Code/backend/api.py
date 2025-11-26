@@ -362,6 +362,10 @@ def handle_request(conn, request):
                     response += 'Access-Control-Allow-Origin: *\r\n'
                     response += 'Connection: close\r\n'
                     response += 'Content-Length: {}\r\n'.format(file_size)
+                    # Prevent caching of HTML pages
+                    response += 'Cache-Control: no-cache, no-store, must-revalidate\r\n'
+                    response += 'Pragma: no-cache\r\n'
+                    response += 'Expires: 0\r\n'
                     response += '\r\n'
                     conn.send(response.encode())
                     
@@ -403,6 +407,17 @@ def handle_request(conn, request):
                 response += 'Access-Control-Allow-Origin: *\r\n'
                 response += 'Connection: close\r\n'
                 response += 'Content-Length: {}\r\n'.format(file_size)
+                
+                # Add caching headers for images (cache for 1 week)
+                if content_type.startswith('image/'):
+                    response += 'Cache-Control: public, max-age=604800\r\n'  # 7 days
+                    response += 'Expires: Thu, 31 Dec 2026 23:59:59 GMT\r\n'
+                else:
+                    # No cache for HTML, CSS, JS files
+                    response += 'Cache-Control: no-cache, no-store, must-revalidate\r\n'
+                    response += 'Pragma: no-cache\r\n'
+                    response += 'Expires: 0\r\n'
+                
                 response += '\r\n'
                 conn.send(response.encode())
                 
