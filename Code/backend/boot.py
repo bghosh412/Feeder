@@ -40,9 +40,14 @@ if wifi.is_connected():
             import mdns
             mdns_server = mdns.Server(0)
             mdns_server.start(mdns_hostname, mdns_service_name)
-            mdns_server.add_service('_http', '_tcp', 5000, mdns_hostname)
+            # Add HTTP service advertisement
+            mdns_server.add_service('_http', '_tcp', 5000, mdns_service_name)
             print('mDNS started: {}.local'.format(mdns_hostname))
             print('Access at: http://{}.local:5000'.format(mdns_hostname))
+            # Also try to set the hostname via network interface
+            sta_if = network.WLAN(network.STA_IF)
+            sta_if.config(dhcp_hostname=mdns_hostname)
+            print('Network hostname also set to: {}'.format(mdns_hostname))
         except ImportError:
             # mDNS not available on ESP8266, use network hostname
             sta_if = network.WLAN(network.STA_IF)

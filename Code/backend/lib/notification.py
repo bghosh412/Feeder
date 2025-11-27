@@ -1,6 +1,7 @@
 # Notification handler using ntfy
 import json
 
+# Default topic (will be overridden by config if available)
 ntfy_topic = 'FF0x98854'
 
 # MicroPython-compatible notification sender
@@ -25,7 +26,16 @@ def send_ntfy_notification(message):
     except:
         pass
     
-    url = 'https://ntfy.sh/' + ntfy_topic
+    # Get topic from config at runtime (avoids circular import at module load)
+    topic = ntfy_topic
+    try:
+        import config
+        if hasattr(config, 'NTFY_TOPIC'):
+            topic = config.NTFY_TOPIC
+    except:
+        pass  # Use default if config unavailable
+    
+    url = 'https://ntfy.sh/' + topic
     headers = {'Title': 'Auto Feeder'}
     try:
         r = urequests.post(url, data=message, headers=headers)

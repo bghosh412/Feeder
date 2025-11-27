@@ -43,7 +43,7 @@ RTC_SCL_PIN = 5   # D1
 DEEP_SLEEP_MINUTES = 30  # Wake up every 30 minutes to check schedule
 
 # Notification Configuration (ntfy)
-NTFY_TOPIC = "your_fish_feeder_topic"
+NTFY_TOPIC = "FF0x98854"
 NTFY_SERVER = "https://ntfy.sh"
 SEND_NOTIFICATIONS = True
 

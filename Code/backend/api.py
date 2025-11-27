@@ -4,8 +4,12 @@ import services
 import last_fed_service
 import quantity_service
 import next_feed_service
+import time
 
 gc.collect()
+
+# Track server start time for uptime calculation
+SERVER_START_TIME = time.time()
 
 # Manual JSON encoding
 def json_encode(obj):
@@ -263,8 +267,7 @@ def handle_request(conn, request):
         elif path == '/api/system/uptime':
             if method == 'GET':
                 try:
-                    import time
-                    uptime_seconds = time.time()
+                    uptime_seconds = int(time.time() - SERVER_START_TIME)
                     send_response(conn, '200 OK', 'application/json', json_encode({'uptime': uptime_seconds}))
                 except Exception as e:
                     print('Error reading uptime:', e)
