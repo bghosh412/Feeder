@@ -20,3 +20,16 @@ def write_last_fed_now():
         return True
     except:
         return False
+
+def write_last_fed(iso_time):
+    """Write last fed time from ISO timestamp string.
+    Args:
+        iso_time: ISO format timestamp string (YYYY-MM-DDTHH:MM:SS)
+    Returns: True if successful, False otherwise
+    """
+    try:
+        with open(data_file, 'w') as f:
+            f.write(iso_time)
+        return True
+    except:
+        return False

@@ -5,6 +5,10 @@
 WIFI_SSID = "your_wifi_ssid"
 WIFI_PASSWORD = "your_wifi_password"
 
+# mDNS/Hostname Configuration
+MDNS_HOSTNAME = "feeder"  # Access via http://feeder.local:5000
+MDNS_SERVICE_NAME = "Fish Feeder Device"
+
 # Feeding Schedule (24-hour format)
 FEEDING_TIMES = [
     (8, 0),   # 8:00 AM

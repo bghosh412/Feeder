@@ -83,7 +83,14 @@ def send_response(conn, status, content_type, body):
 
 def handle_request(conn, request):
     gc.collect()
+    method = None
+    path = None
     try:
+        # Handle empty request
+        if not request or len(request) == 0:
+            print('Empty request received, ignoring')
+            return
+            
         lines = request.split(b'\r\n')
         if not lines:
             return
@@ -124,6 +131,10 @@ def handle_request(conn, request):
             import time
             import lib.notification
             import calibration_service
+            import event_log_service
+            
+            # Log manual feed event
+            event_log_service.log_event(event_log_service.EVENT_FEED_MANUAL, 'Manual feed via web interface')
             
             # Disburse food using calibrated servo settings
             food_dispensed = calibration_service.disburseFood()
@@ -136,9 +147,12 @@ def handle_request(conn, request):
                 quantity_service.write_quantity(quantity)
                 last_fed_service.write_last_fed_now()
                 
+                # Free memory before sending notification
+                gc.collect()
+                
                 # Send notification
                 now = time.localtime()
-                msg = "Feeding done at {:02d}:{:02d}:{:02d}. Feed remaining: {}".format(now[3], now[4], now[5], quantity)
+                msg = "Food disbursed at {:02d}:{:02d}:{:02d}. Feed remaining: {}".format(now[3], now[4], now[5], quantity)
                 lib.notification.send_ntfy_notification(msg)
                 
                 result = json_encode({'status': 'ok', 'quantity': quantity})
@@ -155,9 +169,17 @@ def handle_request(conn, request):
                 send_response(conn, '200 OK', 'application/json', result)
             else:
                 import lib.notification
+                import event_log_service
                 value = body_data.get('quantity')
                 if value is not None:
                     quantity_service.write_quantity(value)
+                    
+                    # Log quantity update
+                    event_log_service.log_event(event_log_service.EVENT_QUANTITY_UPDATE, 'Updated to {}'.format(value))
+                    
+                    # Free memory before sending notification
+                    gc.collect()
+                    
                     msg = "Remaining food quantity updated to {}".format(value)
                     lib.notification.send_ntfy_notification(msg)
                     result = json_encode({'status': 'ok'})
@@ -191,15 +213,81 @@ def handle_request(conn, request):
                 send_response(conn, '200 OK', 'application/json', json_encode({'status': 'ok', 'message': 'Schedule deleted'}))
             else:
                 # write_schedule already calculates and saves next feed time
+                import event_log_service
                 print('Received schedule data:', body_data)
                 result = services.write_schedule(body_data)
                 if result:
+                    # Log schedule change
+                    event_log_service.log_event(event_log_service.EVENT_CONFIG_CHANGE, 'Schedule updated')
                     send_response(conn, '200 OK', 'application/json', json_encode({'status': 'ok'}))
                 else:
                     print('Failed to write schedule')
                     send_response(conn, '500 Internal Server Error', 'application/json', json_encode({'error': 'Failed to save schedule'}))
         
         elif path == '/api/calibration/get':
+            if method == 'GET':
+                try:
+                    import calibration_service
+                    data = calibration_service.get_current_calibration()
+                    send_response(conn, '200 OK', 'application/json', json_encode(data))
+                except Exception as e:
+                    print('Error reading calibration:', e)
+                    send_response(conn, '500 Internal Server Error', 'application/json', json_encode({'error': str(e)}))
+            else:
+                send_response(conn, '405 Method Not Allowed', 'application/json', json_encode({'error': 'Only GET allowed'}))
+        
+        elif path == '/api/events':
+            if method == 'GET':
+                try:
+                    limit = 100  # Default to all events
+                    events = event_log_service.read_events(limit)
+                    send_response(conn, '200 OK', 'application/json', json_encode({'events': events}))
+                except Exception as e:
+                    print('Error reading events:', e)
+                    send_response(conn, '500 Internal Server Error', 'application/json', json_encode({'error': str(e)}))
+            else:
+                send_response(conn, '405 Method Not Allowed', 'application/json', json_encode({'error': 'Only GET allowed'}))
+        
+        elif path == '/api/system/memory':
+            if method == 'GET':
+                try:
+                    gc.collect()
+                    free_mem = gc.mem_free()
+                    send_response(conn, '200 OK', 'application/json', json_encode({'free_memory': free_mem}))
+                except Exception as e:
+                    print('Error reading memory:', e)
+                    send_response(conn, '500 Internal Server Error', 'application/json', json_encode({'error': str(e)}))
+            else:
+                send_response(conn, '405 Method Not Allowed', 'application/json', json_encode({'error': 'Only GET allowed'}))
+        
+        elif path == '/api/system/uptime':
+            if method == 'GET':
+                try:
+                    import time
+                    uptime_seconds = time.time()
+                    send_response(conn, '200 OK', 'application/json', json_encode({'uptime': uptime_seconds}))
+                except Exception as e:
+                    print('Error reading uptime:', e)
+                    send_response(conn, '500 Internal Server Error', 'application/json', json_encode({'error': str(e)}))
+            else:
+                send_response(conn, '405 Method Not Allowed', 'application/json', json_encode({'error': 'Only GET allowed'}))
+        
+        elif path == '/api/config':
+            if method == 'GET':
+                try:
+                    import config
+                    result = {
+                        'ntfy_topic': config.NTFY_TOPIC if hasattr(config, 'NTFY_TOPIC') else 'N/A',
+                        'ntfy_server': config.NTFY_SERVER if hasattr(config, 'NTFY_SERVER') else 'N/A'
+                    }
+                    send_response(conn, '200 OK', 'application/json', json_encode(result))
+                except Exception as e:
+                    print('Error reading config:', e)
+                    send_response(conn, '500 Internal Server Error', 'application/json', json_encode({'error': str(e)}))
+            else:
+                send_response(conn, '405 Method Not Allowed', 'application/json', json_encode({'error': 'Only GET allowed'}))
+        
+        elif path == '/api/calibration':
             if method == 'GET':
                 try:
                     import calibration_service
@@ -383,8 +471,8 @@ def handle_request(conn, request):
                 
         else:
             # Try to serve static file
+            file_path = 'UI' + path
             try:
-                file_path = 'UI' + path
                 content_type = 'text/html'
                 if path.endswith('.css'):
                     content_type = 'text/css'
@@ -445,50 +533,134 @@ def handle_request(conn, request):
 class SimpleServer:
     def __init__(self):
         self.socket = None
+        self.use_asyncio = False
         
     def run(self, host='0.0.0.0', port=5000):
-        # Get actual IP address if host is 0.0.0.0
-        if host == '0.0.0.0':
+        # Try to use asyncio if available
+        try:
+            import uasyncio as asyncio
+            self.use_asyncio = True
+            print('Using asyncio mode')
+            asyncio.run(self._run_async(host, port))
+        except ImportError:
+            print('Asyncio not available, using blocking mode')
+            self._run_blocking(host, port)
+    
+    async def _run_async(self, host, port):
+        """Async server implementation that allows concurrent tasks."""
+        import uasyncio as asyncio
+        
+        # Get actual IP address
+        actual_ip = self._get_ip(host)
+        
+        # Create and bind socket
+        addr = socket.getaddrinfo(host, port)[0][-1]
+        self.socket = socket.socket()
+        self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        self.socket.bind(addr)
+        self.socket.listen(5)
+        self.socket.setblocking(False)  # Non-blocking for asyncio
+        print('Server running on {}:{}'.format(actual_ip, port))
+        
+        # Send startup notification
+        self._send_startup_notification(actual_ip, port)
+        
+        while True:
             try:
-                import network
-                sta = network.WLAN(network.STA_IF)
-                if sta.isconnected():
-                    actual_ip = sta.ifconfig()[0]
-                    print('Server will run on {}:{}'.format(actual_ip, port))
-                else:
-                    actual_ip = '0.0.0.0'
-                    print('Not connected to WiFi, using 0.0.0.0')
+                # Accept connections asynchronously
+                conn, addr = await asyncio.wait_for(
+                    self._accept_connection(), 
+                    timeout=1
+                )
+                print('Connection from', addr)
+                
+                # Handle request in a separate task (non-blocking)
+                asyncio.create_task(self._handle_connection(conn))
+                
+            except asyncio.TimeoutError:
+                # Timeout allows other tasks (like scheduler) to run
+                await asyncio.sleep(0)
+            except Exception as e:
+                print('Server error:', e)
+                await asyncio.sleep(0.1)
+                gc.collect()
+    
+    async def _accept_connection(self):
+        """Async wrapper for socket.accept()."""
+        import uasyncio as asyncio
+        while True:
+            try:
+                return self.socket.accept()
+            except OSError:
+                await asyncio.sleep(0.1)
+    
+    async def _handle_connection(self, conn):
+        """Handle a single connection asynchronously."""
+        import uasyncio as asyncio
+        try:
+            conn.settimeout(5.0)
+            
+            # Read request
+            request = b''
+            while True:
+                try:
+                    chunk = conn.recv(1024)
+                    if not chunk:
+                        break
+                    request += chunk
+                    # Check if we have full request
+                    if b'\r\n\r\n' in request:
+                        # Check if there's a body
+                        if b'Content-Length:' in request:
+                            header_end = request.find(b'\r\n\r\n')
+                            headers = request[:header_end].decode()
+                            for line in headers.split('\r\n'):
+                                if line.startswith('Content-Length:'):
+                                    content_length = int(line.split(':')[1].strip())
+                                    body_received = len(request) - header_end - 4
+                                    if body_received >= content_length:
+                                        break
+                        else:
+                            break
+                except:
+                    break
+            
+            if request:
+                handle_request(conn, request)
+            
+            conn.close()
+        except Exception as e:
+            print('Connection error:', e)
+            try:
+                import sys
+                sys.print_exception(e)
             except:
-                actual_ip = '0.0.0.0'
-                print('Could not determine IP, using 0.0.0.0')
-        else:
-            actual_ip = host
+                import traceback
+                traceback.print_exc()
+        finally:
+            try:
+                conn.close()
+            except:
+                pass
+            gc.collect()
+    
+    def _run_blocking(self, host, port):
+        """Blocking server implementation (fallback if asyncio unavailable)."""
+        actual_ip = self._get_ip(host)
         
         addr = socket.getaddrinfo(host, port)[0][-1]
         self.socket = socket.socket()
         self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        # SO_KEEPALIVE not supported on ESP8266 MicroPython
         self.socket.bind(addr)
         self.socket.listen(5)
         print('Server running on {}:{}'.format(actual_ip, port))
         
-        # Send notification with server URL
-        try:
-            import lib.notification
-            url = 'http://{}:{}'.format(actual_ip, port)
-            import time
-            now = time.localtime()
-            time_str = "{:02d}:{:02d}:{:02d}".format(now[3], now[4], now[5])
-            msg = 'Feeder started at {} and can be accessed at {}'.format(time_str, url)
-            lib.notification.send_ntfy_notification(msg)
-            print('Startup notification sent:', msg)
-        except Exception as e:
-            print('Could not send startup notification:', e)
+        self._send_startup_notification(actual_ip, port)
         
         while True:
+            conn = None
             try:
                 conn, addr = self.socket.accept()
-                print('Connection from', addr)
                 conn.settimeout(5.0)
                 
                 # Read request
@@ -499,9 +671,7 @@ class SimpleServer:
                         if not chunk:
                             break
                         request += chunk
-                        # Check if we have full request
                         if b'\r\n\r\n' in request:
-                            # Check if there's a body
                             if b'Content-Length:' in request:
                                 header_end = request.find(b'\r\n\r\n')
                                 headers = request[:header_end].decode()
@@ -519,19 +689,42 @@ class SimpleServer:
                 if request:
                     handle_request(conn, request)
                 
-                # Close connection (shutdown not always available on ESP8266)
-                try:
-                    conn.close()
-                except:
-                    pass
+                conn.close()
                 gc.collect()
             except Exception as e:
                 print('Server error:', e)
-                try:
-                    conn.close()
-                except:
-                    pass
+                if conn:
+                    try:
+                        conn.close()
+                    except:
+                        pass
                 gc.collect()
+    
+    def _get_ip(self, host):
+        """Get actual IP address."""
+        if host == '0.0.0.0':
+            try:
+                import network
+                sta = network.WLAN(network.STA_IF)
+                if sta.isconnected():
+                    return sta.ifconfig()[0]
+            except:
+                pass
+        return host
+    
+    def _send_startup_notification(self, ip, port):
+        """Send startup notification."""
+        try:
+            import lib.notification
+            import time
+            url = 'http://{}:{}'.format(ip, port)
+            now = time.localtime()
+            time_str = "{:02d}:{:02d}:{:02d}".format(now[3], now[4], now[5])
+            msg = 'Feeder started at {} and can be accessed at {}'.format(time_str, url)
+            lib.notification.send_ntfy_notification(msg)
+            print('Startup notification sent:', msg)
+        except Exception as e:
+            print('Could not send startup notification:', e)
 
 app = SimpleServer()
 

@@ -17,6 +17,14 @@ def send_ntfy_notification(message):
     if urequests is None:
         print('urequests not available, skipping notification')
         return
+    
+    # Free up memory before HTTPS request
+    try:
+        import gc
+        gc.collect()
+    except:
+        pass
+    
     url = 'https://ntfy.sh/' + ntfy_topic
     headers = {'Title': 'Auto Feeder'}
     try:
@@ -26,6 +34,13 @@ def send_ntfy_notification(message):
     except Exception as e:
         print('ntfy notification error:', e)
         # Don't fail if notification fails
+    finally:
+        # Clean up after notification
+        try:
+            import gc
+            gc.collect()
+        except:
+            pass
 
 class NotificationService:
     """Send push notifications via ntfy.sh"""

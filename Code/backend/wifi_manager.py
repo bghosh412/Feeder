@@ -45,8 +45,14 @@ class WifiManager:
 
 
     def connect(self):
+        import gc
+        
         if self.wlan_sta.isconnected():
             return
+        
+        # Free memory before WiFi operations
+        gc.collect()
+        
         profiles = self.read_credentials()
         for ssid, *_ in self.wlan_sta.scan():
             ssid = ssid.decode("utf-8")
@@ -96,11 +102,20 @@ class WifiManager:
 
 
     def wifi_connect(self, ssid, password):
+        import gc
+        
+        # Free memory before connection attempt
+        gc.collect()
+        
         print('Trying to connect to:', ssid)
         self.wlan_sta.connect(ssid, password)
         for _ in range(100):
             if self.wlan_sta.isconnected():
                 print('\nConnected! Network information:', self.wlan_sta.ifconfig())
+                
+                # Clean up after successful connection
+                gc.collect()
+                
                 return True
             else:
                 print('.', end='')
@@ -111,6 +126,11 @@ class WifiManager:
 
     
     def web_server(self):
+        import gc
+        
+        # Free memory before starting web server
+        gc.collect()
+        
         self.wlan_ap.active(True)
         self.wlan_ap.config(essid = self.ap_ssid, password = self.ap_password, authmode = self.ap_authmode)
         server_socket = socket.socket()
@@ -120,7 +140,10 @@ class WifiManager:
         server_socket.bind(('', 80))
         server_socket.listen(1)
         print('Connect to', self.ap_ssid, 'with the password', self.ap_password, 'and access the captive portal at', self.wlan_ap.ifconfig()[0])
+        
         while True:
+            # Free memory at start of each request loop
+            gc.collect()
             if self.wlan_sta.isconnected():
                 self.wlan_ap.active(False)
                 if self.reboot:

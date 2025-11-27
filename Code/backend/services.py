@@ -59,6 +59,11 @@ def write_schedule(schedule_data):
         schedule_data: dict with feeding_times and days
     Returns: True if successful, False otherwise
     """
+    import gc
+    
+    # Free memory before processing schedule
+    gc.collect()
+    
     try:
         print('write_schedule received:', schedule_data)
         
@@ -136,9 +141,13 @@ def write_schedule(schedule_data):
         else:
             next_feed_service.write_next_feed("Not scheduled")
         
+        # Clean up after schedule processing
+        gc.collect()
+        
         return True
     except Exception as e:
         print('Error in write_schedule:', e)
         import sys
         sys.print_exception(e)
+        gc.collect()
         return False

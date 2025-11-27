@@ -1,5 +1,13 @@
 # Fish Feeder Testing Guide
 
+## Features
+
+This backend includes:
+- **Automatic Scheduler**: Asyncio-based feeding scheduler (see [SCHEDULER.md](SCHEDULER.md))
+- **Web API Server**: Always-on HTTP server for remote control
+- **Servo Calibration**: Adjustable duty cycle and pulse duration
+- **Feed Management**: Schedule tracking, last fed time, quantity monitoring
+
 ## Local Testing with MicroPython
 
 ### 1. Test Motor Control
@@ -13,10 +21,16 @@ micropython ../../Tests/test_motor.py
 micropython ../../Tests/test_rtc.py
 ```
 
-### 3. Syntax Check Main Program
+### 3. Test Scheduler
+```bash
+micropython test_scheduler.py
+```
+
+### 4. Syntax Check Main Program
 ```bash
 micropython -m py_compile main.py
 micropython -m py_compile config.py
+micropython -m py_compile scheduler_service.py
 ```
 
 ## Wokwi Online Simulation

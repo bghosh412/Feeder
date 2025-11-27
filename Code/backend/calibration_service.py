@@ -79,6 +79,11 @@ def disburseFood():
     """Disburse food using calibrated servo settings.
     Reads duty cycle and pulse duration from file, runs servo, then deinits.
     """
+    import gc
+    
+    # Free memory before servo operation
+    gc.collect()
+    
     duty_cycle, pulse_duration = read_calibration()
     
     try:
@@ -93,16 +98,27 @@ def disburseFood():
         # Deinitialize to stop motor
         servo.deinit()
         print("Food dispensed, servo deinitialized")
+        
+        # Clean up after servo operation
+        gc.collect()
+        
         return True
         
     except Exception as e:
         print(f"Error dispensing food: {e}")
+        # Clean up on error too
+        gc.collect()
         return False
 
 def test_calibration():
     """Test current calibration by running servo with current settings.
     Returns current calibration values after test.
     """
+    import gc
+    
+    # Free memory before test
+    gc.collect()
+    
     duty_cycle, pulse_duration = read_calibration()
     
     try:
@@ -118,6 +134,9 @@ def test_calibration():
         servo.deinit()
         print("Test complete, servo deinitialized")
         
+        # Clean up after test
+        gc.collect()
+        
         return {
             'success': True,
             'duty_cycle': duty_cycle,
@@ -126,6 +145,7 @@ def test_calibration():
         
     except Exception as e:
         print(f"Error testing calibration: {e}")
+        gc.collect()
         return {
             'success': False,
             'error': str(e)
