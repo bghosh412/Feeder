@@ -1,5 +1,9 @@
 import gc
 import socket
+import services
+import last_fed_service
+import quantity_service
+import next_feed_service
 import time
 
 gc.collect()
@@ -132,8 +136,6 @@ def handle_request(conn, request):
             import lib.notification
             import calibration_service
             import event_log_service
-            import quantity_service
-            import last_fed_service
             
             # Log manual feed event
             event_log_service.log_event(event_log_service.EVENT_FEED_MANUAL, 'Manual feed via web interface')
@@ -166,14 +168,12 @@ def handle_request(conn, request):
             
         elif path == '/api/quantity':
             if method == 'GET':
-                import quantity_service
                 quantity = quantity_service.read_quantity()
                 result = json_encode({'quantity': quantity})
                 send_response(conn, '200 OK', 'application/json', result)
             else:
                 import lib.notification
                 import event_log_service
-                import quantity_service
                 value = body_data.get('quantity')
                 if value is not None:
                     quantity_service.write_quantity(value)
@@ -192,9 +192,6 @@ def handle_request(conn, request):
                     send_response(conn, '400 Bad Request', 'application/json', json_encode({'error': 'Missing quantity'}))
                     
         elif path == '/api/home':
-            import quantity_service
-            import last_fed_service
-            import next_feed_service
             quantity = quantity_service.read_quantity()
             last_fed = last_fed_service.read_last_fed()
             next_feed = next_feed_service.read_next_feed()
@@ -211,7 +208,6 @@ def handle_request(conn, request):
             send_response(conn, '200 OK', 'application/json', json_encode({'status': 'ok', 'message': 'Server is running'}))
             
         elif path == '/api/schedule' or path == '/api/schedules' or path.startswith('/api/schedule/'):
-            import services
             if method == 'GET':
                 data = services.read_schedule()
                 result = json_encode(data) if data else json_encode({'error': 'Could not read schedule'})
@@ -247,7 +243,6 @@ def handle_request(conn, request):
         elif path == '/api/events':
             if method == 'GET':
                 try:
-                    import event_log_service
                     limit = 100  # Default to all events
                     events = event_log_service.read_events(limit)
                     send_response(conn, '200 OK', 'application/json', json_encode({'events': events}))
@@ -432,12 +427,10 @@ def handle_request(conn, request):
                 
         elif path == '/api/lastfed':
             if method == 'GET':
-                import last_fed_service
                 last_fed = last_fed_service.read_last_fed()
                 result = json_encode({'last_fed_time': last_fed}) if last_fed else json_encode({'error': 'Could not read'})
                 send_response(conn, '200 OK', 'application/json', result)
             else:
-                import last_fed_service
                 last_fed_time = body_data.get('last_fed_time')
                 if last_fed_time:
                     with open(last_fed_service.data_file, 'w') as f:

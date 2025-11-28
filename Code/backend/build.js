@@ -1,3 +1,12 @@
+// -----------------------------------------------------------------------------
+// To refresh Microdot files from upstream, run the following commands:
+//
+// curl -o microdot.py https://raw.githubusercontent.com/miguelgrinberg/microdot/main/src/microdot.py
+// curl -o microdot_asyncio.py https://raw.githubusercontent.com/miguelgrinberg/microdot/main/src/microdot_asyncio.py
+// curl -o microdot_utils.py https://raw.githubusercontent.com/miguelgrinberg/microdot/main/src/microdot_utils.py
+// curl -o microdot_websocket.py https://raw.githubusercontent.com/miguelgrinberg/microdot/main/src/microdot_websocket.py
+// curl -o microdot_utemplate.py https://raw.githubusercontent.com/miguelgrinberg/microdot-utemplate/main/src/microdot_utemplate.py
+// -----------------------------------------------------------------------------
 const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
@@ -9,34 +18,6 @@ const distDir = path.join(__dirname, 'dist');
 const frontendDir = path.join(__dirname, '..', 'frontend');
 const frontendDistDir = path.join(frontendDir, 'dist');
 
-// Files needed for both modes
-const commonFiles = [
-  'config.py',
-  'lib/stepper.py',
-  'lib/rtc_handler.py',
-  'lib/notification.py'
-];
-
-// Battery mode specific files
-const batteryFiles = [
-  'main.py',
-  ...commonFiles
-];
-
-// API server mode specific files
-const apiFiles = [
-  'api.py',
-  'services.py',
-  'last_fed_service.py',
-  'next_feed_service.py',
-  'quantity_service.py',
-  'urequests.py',
-  'boot.py',
-  'wifi_manager.py',
-  'main.py',
-  'wifi.dat',
-  ...commonFiles
-];
 
 // Data files (empty templates for API mode)
 const dataFiles = [
@@ -158,35 +139,41 @@ function build() {
   
 
 
+
+
   // Copy all .py files from backend and subfolders to dist, preserving structure
   // Exclude microdot files and dist folder itself
-  const excludeFiles = ['microdot.py', 'microdot_asyncio.py', 'microdot_utemplate.py', 
-                         'microdot_utils.py', 'microdot_websocket.py'];
+  const excludeFiles = ['api_old.py', 'test_gpio.py', 'test_servo.py', 'test_scheduler.py'];
   const excludeDirs = ['dist', 'node_modules', '__pycache__'];
-  
+
   function copyAllPyFiles(srcDir, destDir, relPath = '') {
     const entries = fs.readdirSync(srcDir, { withFileTypes: true });
     for (const entry of entries) {
       const srcPath = path.join(srcDir, entry.name);
       const destPath = path.join(destDir, relPath, entry.name);
-      
-      // Skip excluded files
-      if (excludeFiles.includes(entry.name)) {
-        continue;
-      }
-      
+
       if (entry.isDirectory()) {
         // Skip excluded directories
         if (excludeDirs.includes(entry.name)) {
           continue;
         }
         copyAllPyFiles(srcPath, destDir, path.join(relPath, entry.name));
-      } else if (entry.name.endsWith('.py') || entry.name === 'wifi.dat') {
+      } else if (entry.name.endsWith('.py')) {
+        // Skip excluded files
+        if (excludeFiles.includes(entry.name)) {
+          continue;
+        }
         copyFile(srcPath, destPath);
       }
     }
   }
   copyAllPyFiles(__dirname, distDir);
+
+  // Explicitly copy all microdot*.py files from backend root to dist
+  const microdotFiles = fs.readdirSync(__dirname).filter(f => f.startsWith('microdot') && f.endsWith('.py'));
+  for (const f of microdotFiles) {
+    copyFile(path.join(__dirname, f), path.join(distDir, f));
+  }
   
   // Ensure wifi.dat is always copied if it exists
   const wifiDatSrc = path.join(__dirname, 'wifi.dat');
