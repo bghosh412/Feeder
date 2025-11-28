@@ -44,7 +44,7 @@ DEEP_SLEEP_MINUTES = 30  # Wake up every 30 minutes to check schedule
 
 # Notification Configuration (ntfy)
 NTFY_TOPIC = "FF0x98854"
-NTFY_SERVER = "https://ntfy.sh"
+NTFY_SERVER = "http://ntfy.sh"
 SEND_NOTIFICATIONS = True
 
 # Debug Mode

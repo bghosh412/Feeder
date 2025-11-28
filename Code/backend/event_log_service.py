@@ -1,7 +1,7 @@
 # Event logging service for fish feeder
 # Stores critical events in a rotating log file (max 100 entries)
 
-import time
+import utime as time
 
 LOG_FILE = 'data/events.log'
 MAX_ENTRIES = 100

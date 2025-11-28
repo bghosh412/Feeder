@@ -3,7 +3,7 @@ Test script for the feeding scheduler.
 This tests the scheduler_service functions without running the full system.
 """
 
-import time
+import utime as time
 import scheduler_service
 import next_feed_service
 import services

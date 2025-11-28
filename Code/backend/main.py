@@ -1,5 +1,5 @@
 import gc
-import time
+import utime as time
 import uasyncio as asyncio
 
 # Collect garbage before starting

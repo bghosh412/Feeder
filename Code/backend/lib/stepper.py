@@ -1,6 +1,6 @@
 # 28BYJ-48 Stepper Motor Driver
 # Controls the stepper motor via ULN2003 driver
-import time
+import utime as time
 from machine import Pin
 
 class StepperMotor:

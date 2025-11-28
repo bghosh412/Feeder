@@ -34,9 +34,20 @@ def send_ntfy_notification(message):
     except:
         pass  # Use default if config unavailable
     
-    url = 'https://ntfy.sh/' + topic
+    # Use HTTP if configured, else fallback to HTTPS
+    try:
+        import config
+        server_url = getattr(config, 'NTFY_SERVER', 'https://ntfy.sh')
+        if server_url.startswith('http://') or server_url.startswith('https://'):
+            url = server_url.rstrip('/') + '/' + topic
+        else:
+            url = 'https://ntfy.sh/' + topic
+    except:
+        url = 'https://ntfy.sh/' + topic
     headers = {'Title': 'Auto Feeder'}
     try:
+        import gc
+        gc.collect()
         r = urequests.post(url, data=message, headers=headers)
         r.close()
         print('Notification sent:', message)
@@ -70,22 +81,21 @@ class NotificationService:
         priority: 1=min, 3=default, 5=max
         """
         try:
+            import gc
+            gc.collect()
             headers = {
                 'Title': title,
                 'Priority': str(priority),
                 'Tags': 'fish,food'
             }
-            
             response = urequests.post(
                 self.url,
                 data=message.encode('utf-8'),
                 headers=headers
             )
-            
             success = response.status_code == 200
             response.close()
             return success
-            
         except Exception as e:
             print(f"Notification failed: {e}")
             return False

@@ -1,7 +1,7 @@
 # Simple GPIO test for ESP32 stepper motor pins
 # This will blink each pin one at a time to verify connections
 
-import time
+import utime as time
 from machine import Pin
 
 # Your current pin configuration

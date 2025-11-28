@@ -93,7 +93,7 @@ def write_schedule(schedule_data):
         print('Schedule written to file successfully')
         
         # Calculate next feed time
-        import time
+        import utime as time
         import next_feed_service
         
         now = time.localtime()

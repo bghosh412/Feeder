@@ -1,4 +1,4 @@
-import time
+import utime as time
 
 data_file = 'data/last_fed.txt'
 

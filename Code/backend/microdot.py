@@ -8,7 +8,7 @@ servers for MicroPython and standard Python.
 import asyncio
 import io
 import re
-import time
+import utime as time
 
 try:
     import orjson as json

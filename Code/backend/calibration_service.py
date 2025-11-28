@@ -2,7 +2,7 @@
 # Manages duty cycle and pulse duration for food dispensing
 
 from machine import Pin, PWM
-import time
+import utime as time
 
 # Data file path
 CALIBRATION_FILE = 'data/calibration.txt'

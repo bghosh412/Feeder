@@ -4,7 +4,7 @@ Monitors next_feed.txt and automatically triggers feeding at scheduled times.
 """
 
 import uasyncio as asyncio
-import time
+import utime as time
 import next_feed_service
 import calibration_service
 

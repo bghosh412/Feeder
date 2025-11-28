@@ -80,7 +80,7 @@ if wifi.is_connected():
     try:
         import ntptime
         import machine
-        import time
+        import utime as time
         
         # Wait a moment for network to be fully ready
         time.sleep(2)

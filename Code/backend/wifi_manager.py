@@ -7,7 +7,7 @@ import machine
 import network
 import socket
 import re
-import time
+import utime as time
 
 
 class WifiManager:

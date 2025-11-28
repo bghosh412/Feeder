@@ -6,7 +6,7 @@
 # Press Ctrl+C or reset board to stop
 
 from machine import Pin, PWM
-import time
+import utime as time
 
 SERVO_PIN = 18  # Use GPIO18 (D18)
 STOP_DUTY = 75  # Stop/neutral position (initial)

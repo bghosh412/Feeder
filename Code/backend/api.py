@@ -1,6 +1,6 @@
 import gc
 import socket
-import time
+import utime as time
 
 gc.collect()
 
@@ -128,7 +128,7 @@ def handle_request(conn, request):
         # Route handling
         # Support both /api/feed and /api/feednow for compatibility
         if path == '/api/feednow' or path == '/api/feed':
-            import time
+            import utime as time
             import lib.notification
             import calibration_service
             import event_log_service
@@ -726,7 +726,7 @@ class SimpleServer:
         """Send startup notification."""
         try:
             import lib.notification
-            import time
+            import utime as time
             url = 'http://{}:{}'.format(ip, port)
             now = time.localtime()
             time_str = "{:02d}:{:02d}:{:02d}".format(now[3], now[4], now[5])
