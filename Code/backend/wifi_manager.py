@@ -44,7 +44,7 @@ class WifiManager:
         self.debug = debug
 
 
-    def connect(self):
+    def connect(self, retries=1):
         import gc
         
         if self.wlan_sta.isconnected():
@@ -54,14 +54,20 @@ class WifiManager:
         gc.collect()
         
         profiles = self.read_credentials()
-        for ssid, *_ in self.wlan_sta.scan():
-            ssid = ssid.decode("utf-8")
-            if ssid in profiles:
-                password = profiles[ssid]
-                if self.wifi_connect(ssid, password):
-                    return
-        print('Could not connect to any WiFi network. Starting the configuration portal...')
-        self.web_server()
+        attempt = 0
+        while attempt < retries:
+            for ssid, *_ in self.wlan_sta.scan():
+                ssid = ssid.decode("utf-8")
+                if ssid in profiles:
+                    password = profiles[ssid]
+                    if self.wifi_connect(ssid, password):
+                        return
+            attempt += 1
+            if not self.wlan_sta.isconnected() and attempt < retries:
+                print('WiFi connection failed. Retrying ({}/{})...'.format(attempt, retries))
+        if not self.wlan_sta.isconnected():
+            print('Could not connect to any WiFi network after {} attempt(s). Starting the configuration portal...'.format(retries))
+            self.web_server()
         
     
     def disconnect(self):

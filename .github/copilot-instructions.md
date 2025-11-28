@@ -1,3 +1,4 @@
+# CRITICAL: All backend code (in Code/backend/) MUST use only MicroPython-compatible libraries and APIs. Do NOT use standard Python modules that are not available in MicroPython (e.g., datetime, requests, pathlib, etc). Always prefer MicroPython's built-in modules (e.g., time, os, machine, network, ujson, etc) and test for compatibility on ESP8266/ESP32.
 # Fish Feeder - AI Coding Agent Instructions
 
 ## Project Overview

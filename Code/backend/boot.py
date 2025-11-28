@@ -15,11 +15,25 @@ except:
     pass  # Don't fail boot if logging fails
 
 # You can customize SSID and password below if needed
+
+import os
 SSID = 'WifiManager'
 PASSWORD = 'wifimanager'
 print('Starting WiFi connection...')
 wifi = WifiManager()
-wifi.connect()
+
+# MicroPython-compatible file existence check
+def file_exists(path):
+    try:
+        os.stat(path)
+        return True
+    except OSError:
+        return False
+
+# Use WifiManager's retry logic
+wifi_dat_exists = file_exists('wifi.dat')
+max_retries = 3 if wifi_dat_exists else 1
+wifi.connect(retries=max_retries)
 
 # Collect garbage after WiFi connection
 gc.collect()
