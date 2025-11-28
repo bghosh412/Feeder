@@ -1,5 +1,4 @@
 # Notification handler using ntfy
-import json
 
 # Default topic (will be overridden by config if available)
 ntfy_topic = 'FF0x98854'
