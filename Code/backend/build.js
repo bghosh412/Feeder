@@ -164,6 +164,9 @@ function build() {
           continue;
         }
         copyFile(srcPath, destPath);
+      } else if (relPath === 'ota' && (entry.name.endsWith('.json') || entry.name.endsWith('.md'))) {
+        // Copy JSON and MD files from ota directory
+        copyFile(srcPath, destPath);
       }
     }
   }
@@ -214,7 +217,7 @@ function build() {
 This directory contains all files needed for ESP8266 deployment in ${mode} mode.
 
 ## Files included:
-${filesToCopy.map(f => `- ${f}`).join('\n')}
+All Python files from the backend directory, including lib/ and ota/ folders
 
 ${mode === 'api' ? `
 ## Additional directories:

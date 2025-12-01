@@ -443,6 +443,75 @@ def handle_request(conn, request):
                 send_response(conn, '405 Method Not Allowed', 'application/json', json_encode({'error': 'Only POST allowed'}))
                 gc.collect()
 
+        elif path == '/api/ota/check':
+            if method == 'GET':
+                try:
+                    from ota.ota_updater import OTAUpdater
+                    updater = OTAUpdater()
+                    remote_data = updater.check_for_updates()
+                    
+                    if remote_data:
+                        result = json_encode({
+                            'update_available': True,
+                            'version': remote_data['version'],
+                            'date': remote_data.get('date', ''),
+                            'notes': remote_data.get('notes', ''),
+                            'files_count': len(remote_data.get('files', []))
+                        })
+                    else:
+                        result = json_encode({'update_available': False})
+                    
+                    send_response(conn, '200 OK', 'application/json', result)
+                    del result, updater, remote_data
+                    gc.collect()
+                except Exception as e:
+                    print('OTA check error:', e)
+                    error_msg = json_encode({'error': str(e)})
+                    send_response(conn, '500 Internal Server Error', 'application/json', error_msg)
+                    gc.collect()
+            else:
+                send_response(conn, '405 Method Not Allowed', 'application/json', json_encode({'error': 'Only GET allowed'}))
+                gc.collect()
+
+        elif path == '/api/ota/update':
+            if method == 'POST':
+                try:
+                    from ota.ota_updater import check_and_update
+                    success = check_and_update()
+                    result = json_encode({'success': success})
+                    send_response(conn, '200 OK', 'application/json', result)
+                    del result, success
+                    gc.collect()
+                except Exception as e:
+                    print('OTA update error:', e)
+                    error_msg = json_encode({'success': False, 'error': str(e)})
+                    send_response(conn, '500 Internal Server Error', 'application/json', error_msg)
+                    gc.collect()
+            else:
+                send_response(conn, '405 Method Not Allowed', 'application/json', json_encode({'error': 'Only POST allowed'}))
+                gc.collect()
+
+        elif path == '/api/system/reboot':
+            if method == 'POST':
+                try:
+                    result = json_encode({'success': True, 'message': 'Rebooting...'})
+                    send_response(conn, '200 OK', 'application/json', result)
+                    del result
+                    gc.collect()
+                    # Reboot after sending response
+                    import machine
+                    import utime as time
+                    time.sleep(1)
+                    machine.reset()
+                except Exception as e:
+                    print('Reboot error:', e)
+                    error_msg = json_encode({'success': False, 'error': str(e)})
+                    send_response(conn, '500 Internal Server Error', 'application/json', error_msg)
+                    gc.collect()
+            else:
+                send_response(conn, '405 Method Not Allowed', 'application/json', json_encode({'error': 'Only POST allowed'}))
+                gc.collect()
+
         elif path == '/' or path == '/index.html':
             try:
                 # Stream file in chunks to avoid memory issues

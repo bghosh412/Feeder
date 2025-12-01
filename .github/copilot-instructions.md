@@ -24,33 +24,39 @@ The backend supports two operational modes with different entry points:
 - Use case: Production deployment on battery power
 
 **Mode 2: Always-On API Server**
-- Entry: `api.py` (Microdot web framework)
+- Entry: `api.py` (Custom HTTP server using SimpleServer class)
 - Pattern: HTTP server on port 5000, real-time control via REST API
 - Persistence: JSON files in `data/` directory (`schedule.json`, `last_fed.json`, `next_feed.json`, `quantity.json`)
-- Use case: Development on Raspberry Pi, or mains-powered ESP8266 with web interface
+- Use case: Development on Raspberry Pi, or mains-powered ESP32 with web interface
+- **IMPORTANT**: `api.py` uses a custom HTTP server implementation, NOT Microdot framework
 
 ### Backend Structure (MicroPython)
 ```
 Code/backend/
 ├── main.py              # Entry point: schedule check → feed → deep sleep (battery mode)
-├── api.py               # Microdot API server for web control (always-on mode)
+├── api.py               # Custom HTTP API server for web control (always-on mode)
 ├── config.py            # All hardware pins, WiFi, schedule config
 ├── services.py          # Schedule data operations
 ├── last_fed_service.py  # Last feed timestamp tracking
 ├── next_feed_service.py # Next scheduled feed calculation
 ├── quantity_service.py  # Feed quantity/remaining tracking
-├── microdot.py          # Lightweight WSGI web framework for MicroPython
+├── microdot.py          # Lightweight WSGI web framework (not used by api.py)
 ├── urequests.py         # HTTP client library (MicroPython)
 ├── data/                # JSON persistence layer (API mode only)
 │   ├── schedule.json    # Feeding schedule with times/days
 │   ├── last_fed.json    # Last feeding timestamp
 │   ├── next_feed.json   # Calculated next feed time
 │   └── quantity.json    # Remaining feed quantity
+├── ota/                 # OTA (Over-The-Air) update system
+│   ├── version.json     # Current installed firmware version
+│   ├── ota_updater.py   # OTA update logic (downloads from GitHub)
+│   └── README.md        # OTA documentation
 ├── UI/                  # Static files served by api.py
 │   ├── index.html
 │   ├── feednow.html
 │   ├── setquantity.html
 │   ├── setschedule.html
+│   ├── troubleshooting.html  # Includes OTA update UI
 │   ├── css/styles.css
 │   └── assets/images/
 └── lib/
@@ -258,6 +264,46 @@ MOTOR_SPEED_MS = 5              # Slower speed (higher = slower)
 DEEP_SLEEP_MINUTES = 15  # Check every 15 minutes instead of 30
 ```
 
+### Adding/Removing API Endpoints in api.py
+
+**CRITICAL**: `api.py` uses a custom HTTP server (SimpleServer class), NOT decorators like Flask/Microdot.
+
+**Pattern**: All endpoints are handled in if/elif chains within the request handling logic.
+
+**To add a new endpoint**:
+1. Locate the endpoint handling section (search for `elif path == '/api/`)
+2. Add your endpoint BEFORE the static file serving section (`elif path == '/' or path == '/index.html'`)
+3. Use this pattern:
+```python
+elif path == '/api/your_endpoint':
+    if method == 'GET':  # or 'POST', 'DELETE', etc.
+        try:
+            # Your endpoint logic here
+            result = json_encode({'key': 'value'})
+            send_response(conn, '200 OK', 'application/json', result)
+            del result  # Memory cleanup
+            gc.collect()
+        except Exception as e:
+            print('Error:', e)
+            error_msg = json_encode({'error': str(e)})
+            send_response(conn, '500 Internal Server Error', 'application/json', error_msg)
+            gc.collect()
+    else:
+        send_response(conn, '405 Method Not Allowed', 'application/json', json_encode({'error': 'Only GET allowed'}))
+        gc.collect()
+```
+
+**Memory management**: Always `del` large variables and call `gc.collect()` after sending responses.
+
+**Example endpoints** (search these in api.py for reference):
+- `/api/feednow` - POST endpoint with body parsing
+- `/api/quantity` - GET and POST methods
+- `/api/home` - Combines multiple data sources
+- `/api/ota/check` - OTA update check
+- `/api/ota/update` - OTA download and apply
+
+**To remove an endpoint**: Delete the entire `elif path == '/api/endpoint':` block.
+
 ### Frontend API Integration
 Backend API endpoints expected at `/api/*`:
 - `POST /api/feed` - Manual feeding trigger
@@ -308,8 +354,84 @@ Server always runs on port 5000. Frontend must use `http://localhost:5000` for a
 - **Deep sleep**: Device loses RAM state - RTC maintains time externally
 - **Battery life**: Design decisions prioritize power efficiency over features
 
+## OTA (Over-The-Air) Update System
+
+### Overview
+Memory-efficient firmware update system that downloads only changed files from GitHub.
+
+### Architecture
+- **Surge Deployment**: http://feeder-ota.surge.sh (mirrors `Code/backend/dist/` structure)
+- **Local Version**: `ota/version.json` on ESP32
+- **Remote Version**: `version.json` at Surge base URL
+- **Update Logic**: `ota/ota_updater.py`
+
+### How It Works
+1. **Version Check**: ESP32 compares local `ota/version.json` with remote version from GitHub
+2. **File Download**: If versions differ, downloads files listed in remote `version.json` one-by-one
+3. **Atomic Update**: Each file downloaded to `.tmp`, then atomically renamed (rollback-safe)
+4. **Memory Efficient**: Downloads 512-byte chunks, frequent `gc.collect()`, ~10-20KB RAM usage
+5. **Reboot**: After successful update, device reboots to apply changes
+
+### version.json Format
+```json
+{
+  "version": "1.2.3",
+  "date": "2025-12-01",
+  "files": [
+    "api.py",
+    "services.py",
+    "lib/stepper.py",
+    "UI/index.html"
+  ],
+  "notes": "Bug fixes and new features"
+}
+```
+
+**Important**: 
+- File paths are relative to repo root (which mirrors `dist/` folder)
+- Each new version should include ALL files from previous releases that still need updating
+- `data/` directory files are NEVER included in OTA updates (preserves user settings)
+
+### API Endpoints
+- `GET /api/ota/check` - Check if update available
+- `POST /api/ota/update` - Download and apply update
+- `POST /api/system/reboot` - Reboot device
+
+### Web UI
+Troubleshooting page (`troubleshooting.html`) includes OTA update buttons:
+- "Check for Updates" - Queries `/api/ota/check`
+- "Download Update" - Triggers `/api/ota/update`, auto-reboots after 5 seconds
+
+### Deployment Workflow
+1. Make changes to Feeder codebase
+2. Build: `cd Code/backend && npm run build:api`
+3. Copy `Code/backend/dist/*` to Surge deployment folder
+4. Update `version.json` (bump version, list changed files)
+5. Deploy to Surge: `surge . feeder-ota.surge.sh`
+6. ESP32 checks for updates via web UI or automatically on boot
+
+### Testing
+Run test suite on Raspberry Pi before deploying:
+```bash
+source venv/bin/activate
+python3 Tests/test_ota.py
+```
+
+### Safety Features
+- Atomic file replacement (`.tmp` → rename)
+- Failed downloads don't corrupt existing files
+- `data/` directory excluded (preserves user settings)
+- Version rollback: push older version.json to GitHub
+
+### Files
+- `Code/backend/ota/ota_updater.py` - OTA logic
+- `Code/backend/ota/version.json` - Local version
+- `Code/backend/ota/README.md` - Full OTA documentation
+- `Tests/test_ota.py` - OTA test suite
+
 ## Documentation
 - Full project details: `Instructions/instructions.md`
 - Backend testing guide: `Code/backend/README.md`
 - Frontend setup: `Code/frontend/README.md`
 - Test suite info: `Tests/README.md`
+- OTA system: `Code/backend/ota/README.md`
